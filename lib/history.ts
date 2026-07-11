@@ -1,9 +1,10 @@
-import { DEV_USER_ID } from "@/lib/config";
-import { supabase } from "@/lib/supabase";
+"use server";
+
 import { secondsBetween } from "@/lib/format";
+import { createClient, getUserId } from "@/lib/supabase/server";
 import type { ExerciseLog } from "@/lib/types";
 
-export type WorkoutSessionHistoryItem = {
+type WorkoutSessionHistoryItem = {
   id: string;
   started_at: string;
   completed_at: string | null;
@@ -16,7 +17,7 @@ export type WorkoutSessionHistoryItem = {
   set_count: number;
 };
 
-export type WorkoutSessionDetail = {
+type WorkoutSessionDetail = {
   session: WorkoutSessionHistoryItem;
   logs: Array<
     ExerciseLog & {
@@ -42,6 +43,9 @@ export async function getWorkoutHistory({
 }: {
   status?: "all" | "completed" | "open";
 } = {}): Promise<WorkoutSessionHistoryItem[]> {
+  const supabase = await createClient();
+  const userId = await getUserId();
+
   let query = supabase
     .from("workout_sessions")
     .select(
@@ -56,7 +60,7 @@ export async function getWorkoutHistory({
       workout_days ( name )
     `
     )
-    .eq("user_id", DEV_USER_ID)
+    .eq("user_id", userId)
     .order("started_at", { ascending: false });
 
   if (status === "completed") {
@@ -74,7 +78,10 @@ export async function getWorkoutHistory({
   }
 
   const sessions = (data ?? []) as Array<
-    Omit<WorkoutSessionHistoryItem, "workout_routines" | "workout_days" | "exercise_count" | "set_count"> & {
+    Omit<
+      WorkoutSessionHistoryItem,
+      "workout_routines" | "workout_days" | "exercise_count" | "set_count"
+    > & {
       workout_routines: { name: string } | { name: string }[] | null;
       workout_days: { name: string } | { name: string }[] | null;
     }
@@ -114,6 +121,7 @@ export async function getWorkoutHistory({
 export async function getWorkoutSessionDetail(
   sessionId: string
 ): Promise<WorkoutSessionDetail | null> {
+  const supabase = await createClient();
   const history = await getWorkoutHistory();
   const session = history.find((item) => item.id === sessionId) ?? null;
 

@@ -1,8 +1,9 @@
-import { supabase } from "@/lib/supabase";
-import { DEV_USER_ID } from "@/lib/config";
+"use server";
+
+import { createClient, getUserId } from "@/lib/supabase/server";
 import type { PlannedExercise, Routine, WorkoutDay } from "@/lib/types";
 
-export type RoutineWithStats = Routine & {
+type RoutineWithStats = Routine & {
   day_count: number;
   exercise_count: number;
   is_active: boolean;
@@ -13,10 +14,13 @@ export async function getRoutines({
 }: {
   includeArchived?: boolean;
 } = {}): Promise<Routine[]> {
+  const supabase = await createClient();
+  const userId = await getUserId();
+
   let query = supabase
     .from("workout_routines")
     .select("*")
-    .eq("user_id", DEV_USER_ID)
+    .eq("user_id", userId)
     .order("created_at", { ascending: false });
 
   if (!includeArchived) {
@@ -33,11 +37,14 @@ export async function getRoutines({
 }
 
 export async function getRoutineById(routineId: string): Promise<Routine | null> {
+  const supabase = await createClient();
+  const userId = await getUserId();
+
   const { data, error } = await supabase
     .from("workout_routines")
     .select("*")
     .eq("id", routineId)
-    .eq("user_id", DEV_USER_ID)
+    .eq("user_id", userId)
     .maybeSingle();
 
   if (error) {
@@ -52,6 +59,7 @@ export async function getRoutinesWithStats({
 }: {
   activeRoutineId?: string | null;
 } = {}): Promise<RoutineWithStats[]> {
+  const supabase = await createClient();
   const routines = await getRoutines();
 
   if (routines.length === 0) {
@@ -86,8 +94,8 @@ export async function getRoutinesWithStats({
 
   return routines.map((routine) => {
     const routineDays = (days ?? []).filter((day) => day.routine_id === routine.id);
-    const dayIds = new Set(routineDays.map((day) => day.id));
-    const exerciseCount = (planned ?? []).filter((item) => dayIds.has(item.day_id)).length;
+    const currentDayIds = new Set(routineDays.map((day) => day.id));
+    const exerciseCount = (planned ?? []).filter((item) => currentDayIds.has(item.day_id)).length;
 
     return {
       ...routine,
@@ -99,10 +107,13 @@ export async function getRoutinesWithStats({
 }
 
 export async function createRoutine(name: string, description?: string) {
+  const supabase = await createClient();
+  const userId = await getUserId();
+
   const { data, error } = await supabase
     .from("workout_routines")
     .insert({
-      user_id: DEV_USER_ID,
+      user_id: userId,
       name,
       description: description || null,
     })
@@ -125,6 +136,9 @@ export async function updateRoutine({
   name: string;
   description?: string;
 }) {
+  const supabase = await createClient();
+  const userId = await getUserId();
+
   const { data, error } = await supabase
     .from("workout_routines")
     .update({
@@ -132,7 +146,7 @@ export async function updateRoutine({
       description: description || null,
     })
     .eq("id", routineId)
-    .eq("user_id", DEV_USER_ID)
+    .eq("user_id", userId)
     .select()
     .single();
 
@@ -144,11 +158,14 @@ export async function updateRoutine({
 }
 
 export async function archiveRoutine(routineId: string) {
+  const supabase = await createClient();
+  const userId = await getUserId();
+
   const { error } = await supabase
     .from("workout_routines")
     .update({ archived_at: new Date().toISOString() })
     .eq("id", routineId)
-    .eq("user_id", DEV_USER_ID);
+    .eq("user_id", userId);
 
   if (error) {
     throw new Error(error.message);
@@ -156,11 +173,14 @@ export async function archiveRoutine(routineId: string) {
 }
 
 export async function deleteRoutineIfSafe(routineId: string) {
+  const supabase = await createClient();
+  const userId = await getUserId();
+
   const { count, error: countError } = await supabase
     .from("workout_sessions")
     .select("id", { count: "exact", head: true })
     .eq("routine_id", routineId)
-    .eq("user_id", DEV_USER_ID);
+    .eq("user_id", userId);
 
   if (countError) {
     throw new Error(countError.message);
@@ -174,7 +194,7 @@ export async function deleteRoutineIfSafe(routineId: string) {
     .from("workout_routines")
     .delete()
     .eq("id", routineId)
-    .eq("user_id", DEV_USER_ID);
+    .eq("user_id", userId);
 
   if (error) {
     throw new Error(error.message);
@@ -182,6 +202,8 @@ export async function deleteRoutineIfSafe(routineId: string) {
 }
 
 export async function duplicateRoutine(routineId: string) {
+  const supabase = await createClient();
+  const userId = await getUserId();
   const routine = await getRoutineById(routineId);
 
   if (!routine) {
@@ -191,7 +213,7 @@ export async function duplicateRoutine(routineId: string) {
   const { data: newRoutine, error: routineError } = await supabase
     .from("workout_routines")
     .insert({
-      user_id: DEV_USER_ID,
+      user_id: userId,
       name: `${routine.name} copia`,
       description: routine.description,
     })

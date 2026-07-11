@@ -1,9 +1,10 @@
-import { DEV_USER_ID } from "@/lib/config";
+"use server";
+
 import { estimateOneRepMax } from "@/lib/format";
-import { supabase } from "@/lib/supabase";
+import { createClient, getUserId } from "@/lib/supabase/server";
 import type { ExerciseLog } from "@/lib/types";
 
-export type ExerciseProgressSet = ExerciseLog & {
+type ExerciseProgressSet = ExerciseLog & {
   workout_sessions: {
     id: string;
     started_at: string;
@@ -19,7 +20,7 @@ export type ExerciseProgressSet = ExerciseLog & {
   } | null;
 };
 
-export type ExerciseProgressSummary = {
+type ExerciseProgressSummary = {
   exerciseId: string;
   exerciseName: string;
   primaryMuscle: string | null;
@@ -39,6 +40,9 @@ export async function getProgressSets({
   exerciseId?: string;
   days?: number;
 } = {}): Promise<ExerciseProgressSet[]> {
+  const supabase = await createClient();
+  const userId = await getUserId();
+
   let query = supabase
     .from("exercise_logs")
     .select(
@@ -60,7 +64,7 @@ export async function getProgressSets({
       )
     `
     )
-    .eq("workout_sessions.user_id", DEV_USER_ID)
+    .eq("workout_sessions.user_id", userId)
     .order("created_at", { ascending: false });
 
   if (exerciseId) {
@@ -91,10 +95,9 @@ export async function getProgressSummaries({
   const summaries = new Map<string, ExerciseProgressSummary>();
 
   for (const set of sets) {
-    const existing = summaries.get(set.exercise_id);
     const oneRm = estimateOneRepMax(set.weight, set.reps);
 
-    if (!existing) {
+    if (!summaries.has(set.exercise_id)) {
       summaries.set(set.exercise_id, {
         exerciseId: set.exercise_id,
         exerciseName: set.exercises?.name ?? "Ejercicio",

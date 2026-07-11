@@ -1,1 +1,0 @@
-export const DEV_USER_ID = "4c132550-3afb-4323-9d59-dd6f4ae936ac";

@@ -2,15 +2,15 @@
 
 ## Current Auth Model
 
-The app still uses `DEV_USER_ID` as a temporary personal-user bridge. Code now filters owned records where the current schema makes that possible, but this is not a replacement for Supabase Auth and strict RLS.
+The app uses Supabase Auth sessions via cookies. Application code should not use fixed user IDs.
 
 ## Pending Manual SQL
 
-Run `supabase/migrations/20260711143000_training_module_completion.sql` in Supabase before using archive, duration, and idempotent completion features in production data.
+Run `supabase/migrations/20260711143000_training_module_completion.sql` and the auth/RLS migration in Supabase before using the multiuser production app.
 
-## RLS Future Step
+## RLS
 
-Once Supabase Auth is wired, enable RLS on:
+The multiuser migration enables RLS on:
 
 - `profiles`
 - `exercises`
@@ -21,4 +21,8 @@ Once Supabase Auth is wired, enable RLS on:
 - `workout_sessions`
 - `exercise_logs`
 
-Tables with `user_id` should use `auth.uid() = user_id`. Child tables should use policies that check ownership through their parent routine, day, or session.
+Tables with `user_id` use `auth.uid() = user_id`. Child tables use policies that check ownership through their parent routine, day, or session.
+
+## Exercise Import Script
+
+`scripts/import-exercises.js` is now a manual admin utility. It requires `IMPORT_USER_ID` and should not be used for regular multiuser onboarding. New users start with an empty personal library.

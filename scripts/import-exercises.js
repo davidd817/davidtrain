@@ -9,15 +9,14 @@ dotenv.config({ path: ".env.local" });
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-// PEGA AQUI TU UUID REAL DE SUPABASE AUTH
-const DEV_USER_ID = "4c132550-3afb-4323-9d59-dd6f4ae936ac";
+const IMPORT_USER_ID = process.env.IMPORT_USER_ID;
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   throw new Error("Faltan variables de Supabase en .env.local");
 }
 
-if (DEV_USER_ID === "PEGA_AQUI_TU_USER_ID") {
-  throw new Error("Debes pegar tu DEV_USER_ID real en el script.");
+if (!IMPORT_USER_ID) {
+  throw new Error("Define IMPORT_USER_ID para importar ejercicios a un usuario.");
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -68,7 +67,7 @@ for (const rawLine of lines) {
 
     if (name.length > 2) {
       exercises.push({
-        user_id: DEV_USER_ID,
+        user_id: IMPORT_USER_ID,
         name,
         primary_muscle: currentMuscle,
         secondary_muscle: currentRegion,
@@ -96,7 +95,7 @@ async function main() {
   const { data: existing, error: existingError } = await supabase
     .from("exercises")
     .select("name, primary_muscle, secondary_muscle")
-    .eq("user_id", DEV_USER_ID);
+    .eq("user_id", IMPORT_USER_ID);
 
   if (existingError) {
     throw new Error(existingError.message);

@@ -1,8 +1,9 @@
-import { supabase } from "@/lib/supabase";
-import { DEV_USER_ID } from "@/lib/config";
+"use server";
+
+import { createClient, getUserId } from "@/lib/supabase/server";
 import type { Exercise } from "@/lib/types";
 
-export type CreateExerciseInput = {
+type CreateExerciseInput = {
   name: string;
   primary_muscle?: string;
   secondary_muscle?: string;
@@ -12,7 +13,7 @@ export type CreateExerciseInput = {
   is_favorite?: boolean;
 };
 
-export type UpdateExerciseInput = CreateExerciseInput & {
+type UpdateExerciseInput = CreateExerciseInput & {
   id: string;
 };
 
@@ -21,10 +22,13 @@ export async function getExercises({
 }: {
   includeArchived?: boolean;
 } = {}): Promise<Exercise[]> {
+  const supabase = await createClient();
+  const userId = await getUserId();
+
   let query = supabase
     .from("exercises")
     .select("*")
-    .eq("user_id", DEV_USER_ID)
+    .eq("user_id", userId)
     .order("is_favorite", { ascending: false })
     .order("name", { ascending: true });
 
@@ -42,11 +46,14 @@ export async function getExercises({
 }
 
 export async function getExerciseById(exerciseId: string): Promise<Exercise | null> {
+  const supabase = await createClient();
+  const userId = await getUserId();
+
   const { data, error } = await supabase
     .from("exercises")
     .select("*")
     .eq("id", exerciseId)
-    .eq("user_id", DEV_USER_ID)
+    .eq("user_id", userId)
     .maybeSingle();
 
   if (error) {
@@ -57,10 +64,13 @@ export async function getExerciseById(exerciseId: string): Promise<Exercise | nu
 }
 
 export async function createExercise(input: CreateExerciseInput) {
+  const supabase = await createClient();
+  const userId = await getUserId();
+
   const { data, error } = await supabase
     .from("exercises")
     .insert({
-      user_id: DEV_USER_ID,
+      user_id: userId,
       name: input.name,
       primary_muscle: input.primary_muscle || null,
       secondary_muscle: input.secondary_muscle || null,
@@ -80,6 +90,9 @@ export async function createExercise(input: CreateExerciseInput) {
 }
 
 export async function updateExercise(input: UpdateExerciseInput) {
+  const supabase = await createClient();
+  const userId = await getUserId();
+
   const { data, error } = await supabase
     .from("exercises")
     .update({
@@ -92,7 +105,7 @@ export async function updateExercise(input: UpdateExerciseInput) {
       is_favorite: input.is_favorite ?? false,
     })
     .eq("id", input.id)
-    .eq("user_id", DEV_USER_ID)
+    .eq("user_id", userId)
     .select()
     .single();
 
@@ -110,11 +123,14 @@ export async function setExerciseFavorite({
   exerciseId: string;
   isFavorite: boolean;
 }) {
+  const supabase = await createClient();
+  const userId = await getUserId();
+
   const { error } = await supabase
     .from("exercises")
     .update({ is_favorite: isFavorite })
     .eq("id", exerciseId)
-    .eq("user_id", DEV_USER_ID);
+    .eq("user_id", userId);
 
   if (error) {
     throw new Error(error.message);
@@ -122,11 +138,14 @@ export async function setExerciseFavorite({
 }
 
 export async function archiveExercise(exerciseId: string) {
+  const supabase = await createClient();
+  const userId = await getUserId();
+
   const { error } = await supabase
     .from("exercises")
     .update({ archived_at: new Date().toISOString() })
     .eq("id", exerciseId)
-    .eq("user_id", DEV_USER_ID);
+    .eq("user_id", userId);
 
   if (error) {
     throw new Error(error.message);
@@ -134,6 +153,15 @@ export async function archiveExercise(exerciseId: string) {
 }
 
 export async function deleteExerciseIfUnused(exerciseId: string) {
+  const supabase = await createClient();
+  const userId = await getUserId();
+
+  const exercise = await getExerciseById(exerciseId);
+
+  if (!exercise) {
+    throw new Error("Ejercicio no encontrado.");
+  }
+
   const [{ count: plannedCount, error: plannedError }, { count: logCount, error: logError }] =
     await Promise.all([
       supabase
@@ -142,8 +170,9 @@ export async function deleteExerciseIfUnused(exerciseId: string) {
         .eq("exercise_id", exerciseId),
       supabase
         .from("exercise_logs")
-        .select("id", { count: "exact", head: true })
-        .eq("exercise_id", exerciseId),
+        .select("id, workout_sessions!inner(user_id)", { count: "exact", head: true })
+        .eq("exercise_id", exerciseId)
+        .eq("workout_sessions.user_id", userId),
     ]);
 
   if (plannedError) {
@@ -162,7 +191,7 @@ export async function deleteExerciseIfUnused(exerciseId: string) {
     .from("exercises")
     .delete()
     .eq("id", exerciseId)
-    .eq("user_id", DEV_USER_ID);
+    .eq("user_id", userId);
 
   if (error) {
     throw new Error(error.message);

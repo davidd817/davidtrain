@@ -1,16 +1,20 @@
-import { DEV_USER_ID } from "@/lib/config";
-import { getTrainingState } from "@/lib/training-state";
-import { supabase } from "@/lib/supabase";
-import { getDaysByRoutine } from "@/lib/workout-days";
+"use server";
+
 import { secondsBetween } from "@/lib/format";
+import { getTrainingState } from "@/lib/training-state";
+import { createClient, getUserId } from "@/lib/supabase/server";
+import { getDaysByRoutine } from "@/lib/workout-days";
 import type { ExerciseLog, PlannedExercise, WorkoutSession } from "@/lib/types";
 
-export type WorkoutSessionDetail = WorkoutSession & {
+type WorkoutSessionDetail = WorkoutSession & {
   workout_routines: { name: string } | null;
   workout_days: { name: string; order_index?: number } | null;
 };
 
 export async function getOpenWorkoutSession(): Promise<WorkoutSessionDetail | null> {
+  const supabase = await createClient();
+  const userId = await getUserId();
+
   const { data, error } = await supabase
     .from("workout_sessions")
     .select(
@@ -20,7 +24,7 @@ export async function getOpenWorkoutSession(): Promise<WorkoutSessionDetail | nu
       workout_days ( name, order_index )
     `
     )
-    .eq("user_id", DEV_USER_ID)
+    .eq("user_id", userId)
     .is("completed_at", null)
     .order("started_at", { ascending: false })
     .limit(1)
@@ -34,6 +38,9 @@ export async function getOpenWorkoutSession(): Promise<WorkoutSessionDetail | nu
 }
 
 export async function getLatestCompletedSession(): Promise<WorkoutSessionDetail | null> {
+  const supabase = await createClient();
+  const userId = await getUserId();
+
   const { data, error } = await supabase
     .from("workout_sessions")
     .select(
@@ -43,7 +50,7 @@ export async function getLatestCompletedSession(): Promise<WorkoutSessionDetail 
       workout_days ( name, order_index )
     `
     )
-    .eq("user_id", DEV_USER_ID)
+    .eq("user_id", userId)
     .not("completed_at", "is", null)
     .order("completed_at", { ascending: false })
     .limit(1)
@@ -63,16 +70,33 @@ export async function createWorkoutSession({
   routineId: string;
   dayId: string;
 }) {
+  const supabase = await createClient();
+  const userId = await getUserId();
   const openSession = await getOpenWorkoutSession();
 
   if (openSession) {
     return openSession;
   }
 
+  const { data: routine, error: routineError } = await supabase
+    .from("workout_routines")
+    .select("id")
+    .eq("id", routineId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (routineError) {
+    throw new Error(routineError.message);
+  }
+
+  if (!routine) {
+    throw new Error("Rutina no encontrada.");
+  }
+
   const { data, error } = await supabase
     .from("workout_sessions")
     .insert({
-      user_id: DEV_USER_ID,
+      user_id: userId,
       routine_id: routineId,
       day_id: dayId,
     })
@@ -89,6 +113,9 @@ export async function createWorkoutSession({
 export async function getWorkoutSessionById(
   sessionId: string
 ): Promise<WorkoutSessionDetail | null> {
+  const supabase = await createClient();
+  const userId = await getUserId();
+
   const { data, error } = await supabase
     .from("workout_sessions")
     .select(
@@ -99,7 +126,7 @@ export async function getWorkoutSessionById(
     `
     )
     .eq("id", sessionId)
-    .eq("user_id", DEV_USER_ID)
+    .eq("user_id", userId)
     .maybeSingle();
 
   if (error) {
@@ -116,6 +143,9 @@ export async function getPlannedExercisesForSession(
     return [];
   }
 
+  const supabase = await createClient();
+  const userId = await getUserId();
+
   const { data, error } = await supabase
     .from("exercises_in_day")
     .select(
@@ -127,10 +157,12 @@ export async function getPlannedExercisesForSession(
         primary_muscle,
         secondary_muscle,
         notes
-      )
+      ),
+      workout_days!inner(workout_routines!inner(user_id))
     `
     )
     .eq("day_id", session.day_id)
+    .eq("workout_days.workout_routines.user_id", userId)
     .is("archived_at", null)
     .order("order_index", { ascending: true });
 
@@ -148,6 +180,8 @@ export async function completeWorkoutSession({
   sessionId: string;
   allowIncomplete?: boolean;
 }) {
+  const supabase = await createClient();
+  const userId = await getUserId();
   const session = await getWorkoutSessionById(sessionId);
 
   if (!session) {
@@ -184,7 +218,7 @@ export async function completeWorkoutSession({
       duration_seconds: secondsBetween(session.started_at, completedAt),
     })
     .eq("id", sessionId)
-    .eq("user_id", DEV_USER_ID)
+    .eq("user_id", userId)
     .is("completed_at", null);
 
   if (updateSessionError) {
@@ -199,6 +233,8 @@ async function advanceTrainingDayOnce(session: WorkoutSessionDetail) {
     return;
   }
 
+  const supabase = await createClient();
+  const userId = await getUserId();
   const state = await getTrainingState();
 
   if (!state?.active_routine_id || state.active_routine_id !== session.routine_id) {
@@ -223,12 +259,12 @@ async function advanceTrainingDayOnce(session: WorkoutSessionDetail) {
         next_day_index: nextIndex,
         updated_at: now,
       })
-      .eq("user_id", DEV_USER_ID),
+      .eq("user_id", userId),
     supabase
       .from("workout_sessions")
       .update({ completed_day_advanced_at: now })
       .eq("id", session.id)
-      .eq("user_id", DEV_USER_ID)
+      .eq("user_id", userId)
       .is("completed_day_advanced_at", null),
   ]);
 
@@ -241,7 +277,7 @@ async function advanceTrainingDayOnce(session: WorkoutSessionDetail) {
   }
 }
 
-export type PreviousExercisePerformance = {
+type PreviousExercisePerformance = {
   exerciseId: string;
   sessionId: string;
   startedAt: string;
@@ -264,6 +300,9 @@ export async function getPreviousExercisePerformances({
     return new Map<string, PreviousExercisePerformance>();
   }
 
+  const supabase = await createClient();
+  const userId = await getUserId();
+
   const { data, error } = await supabase
     .from("exercise_logs")
     .select(
@@ -271,6 +310,7 @@ export async function getPreviousExercisePerformances({
       *,
       workout_sessions!inner (
         id,
+        user_id,
         started_at,
         workout_routines ( name ),
         workout_days ( name )
@@ -280,21 +320,23 @@ export async function getPreviousExercisePerformances({
     .in("exercise_id", exerciseIds)
     .neq("session_id", currentSessionId)
     .lt("workout_sessions.started_at", beforeStartedAt)
-    .eq("workout_sessions.user_id", DEV_USER_ID)
+    .eq("workout_sessions.user_id", userId)
     .order("created_at", { ascending: false });
 
   if (error) {
     throw new Error(error.message);
   }
 
-  const rows = (data ?? []) as Array<ExerciseLog & {
-    workout_sessions: {
-      id: string;
-      started_at: string;
-      workout_routines: { name: string } | null;
-      workout_days: { name: string } | null;
-    };
-  }>;
+  const rows = (data ?? []) as Array<
+    ExerciseLog & {
+      workout_sessions: {
+        id: string;
+        started_at: string;
+        workout_routines: { name: string } | null;
+        workout_days: { name: string } | null;
+      };
+    }
+  >;
 
   const byExercise = new Map<string, PreviousExercisePerformance>();
 

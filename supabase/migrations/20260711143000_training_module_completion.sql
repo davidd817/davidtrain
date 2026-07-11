@@ -33,9 +33,4 @@ create index if not exists workout_sessions_user_completed_idx
 create index if not exists exercise_logs_exercise_session_idx
   on public.exercise_logs (exercise_id, session_id);
 
--- RLS hardening notes:
--- The current application still uses a temporary DEV_USER_ID with the anon key.
--- Enabling strict auth.uid() policies now would break the current personal-dev flow.
--- When Supabase Auth is wired in the app, enable RLS on all user-owned tables and
--- use policies based on auth.uid() = user_id. Child tables without user_id should
--- be protected through EXISTS checks against their parent routine/session owner.
+-- RLS hardening is implemented in the follow-up auth migration.

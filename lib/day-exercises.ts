@@ -1,10 +1,54 @@
-import { supabase } from "@/lib/supabase";
-import { DEV_USER_ID } from "@/lib/config";
+"use server";
+
+import { createClient, getUserId } from "@/lib/supabase/server";
 import type { PlannedExercise } from "@/lib/types";
 
-export type DayExercise = PlannedExercise;
+type DayExercise = PlannedExercise;
+
+async function assertDayOwner(dayId: string) {
+  const supabase = await createClient();
+  const userId = await getUserId();
+  const { data, error } = await supabase
+    .from("workout_days")
+    .select("id, workout_routines!inner(user_id)")
+    .eq("id", dayId)
+    .eq("workout_routines.user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!data) {
+    throw new Error("Dia no encontrado.");
+  }
+}
+
+async function getExerciseInDayOwner(itemId: string) {
+  const supabase = await createClient();
+  const userId = await getUserId();
+  const { data, error } = await supabase
+    .from("exercises_in_day")
+    .select("*, workout_days!inner(workout_routines!inner(user_id))")
+    .eq("id", itemId)
+    .eq("workout_days.workout_routines.user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!data) {
+    throw new Error("Ejercicio planificado no encontrado.");
+  }
+
+  return data as PlannedExercise;
+}
 
 export async function getExercisesByDay(dayId: string): Promise<DayExercise[]> {
+  const supabase = await createClient();
+  const userId = await getUserId();
+
   const { data, error } = await supabase
     .from("exercises_in_day")
     .select(
@@ -25,7 +69,7 @@ export async function getExercisesByDay(dayId: string): Promise<DayExercise[]> {
     `
     )
     .eq("day_id", dayId)
-    .eq("workout_days.workout_routines.user_id", DEV_USER_ID)
+    .eq("workout_days.workout_routines.user_id", userId)
     .is("archived_at", null)
     .order("order_index", { ascending: true });
 
@@ -57,6 +101,25 @@ export async function addExerciseToDay({
   notes?: string;
   orderIndex: number;
 }) {
+  const supabase = await createClient();
+  const userId = await getUserId();
+  await assertDayOwner(dayId);
+
+  const { data: exercise, error: exerciseError } = await supabase
+    .from("exercises")
+    .select("id")
+    .eq("id", exerciseId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (exerciseError) {
+    throw new Error(exerciseError.message);
+  }
+
+  if (!exercise) {
+    throw new Error("Ejercicio no encontrado.");
+  }
+
   const { data, error } = await supabase
     .from("exercises_in_day")
     .insert({
@@ -97,6 +160,9 @@ export async function updateExerciseInDay({
   restSeconds: number;
   notes?: string;
 }) {
+  const supabase = await createClient();
+  await getExerciseInDayOwner(itemId);
+
   const { data, error } = await supabase
     .from("exercises_in_day")
     .update({
@@ -119,6 +185,9 @@ export async function updateExerciseInDay({
 }
 
 export async function archiveExerciseInDay(itemId: string) {
+  const supabase = await createClient();
+  await getExerciseInDayOwner(itemId);
+
   const { error } = await supabase
     .from("exercises_in_day")
     .update({ archived_at: new Date().toISOString() })
@@ -130,16 +199,8 @@ export async function archiveExerciseInDay(itemId: string) {
 }
 
 export async function duplicateExerciseInDay(itemId: string) {
-  const { data: item, error: itemError } = await supabase
-    .from("exercises_in_day")
-    .select("*")
-    .eq("id", itemId)
-    .single();
-
-  if (itemError) {
-    throw new Error(itemError.message);
-  }
-
+  const supabase = await createClient();
+  const item = await getExerciseInDayOwner(itemId);
   const siblings = await getExercisesByDay(item.day_id);
 
   const { data, error } = await supabase
@@ -174,6 +235,7 @@ export async function moveExerciseInDay({
   itemId: string;
   direction: "up" | "down";
 }) {
+  const supabase = await createClient();
   const items = await getExercisesByDay(dayId);
   const index = items.findIndex((item) => item.id === itemId);
 

@@ -1,13 +1,17 @@
-import { supabase } from "@/lib/supabase";
-import { DEV_USER_ID } from "@/lib/config";
+"use server";
+
+import { createClient, getUserId } from "@/lib/supabase/server";
 import type { PlannedExercise, WorkoutDay } from "@/lib/types";
 
 export async function getDaysByRoutine(routineId: string): Promise<WorkoutDay[]> {
+  const supabase = await createClient();
+  const userId = await getUserId();
+
   const { data, error } = await supabase
     .from("workout_days")
     .select("*, workout_routines!inner(user_id)")
     .eq("routine_id", routineId)
-    .eq("workout_routines.user_id", DEV_USER_ID)
+    .eq("workout_routines.user_id", userId)
     .is("archived_at", null)
     .order("order_index", { ascending: true });
 
@@ -19,11 +23,14 @@ export async function getDaysByRoutine(routineId: string): Promise<WorkoutDay[]>
 }
 
 export async function getWorkoutDayById(dayId: string): Promise<WorkoutDay | null> {
+  const supabase = await createClient();
+  const userId = await getUserId();
+
   const { data, error } = await supabase
     .from("workout_days")
     .select("*, workout_routines!inner(user_id)")
     .eq("id", dayId)
-    .eq("workout_routines.user_id", DEV_USER_ID)
+    .eq("workout_routines.user_id", userId)
     .maybeSingle();
 
   if (error) {
@@ -42,6 +49,23 @@ export async function createWorkoutDay({
   name: string;
   orderIndex: number;
 }) {
+  const supabase = await createClient();
+  const userId = await getUserId();
+  const { data: routine, error: routineError } = await supabase
+    .from("workout_routines")
+    .select("id")
+    .eq("id", routineId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (routineError) {
+    throw new Error(routineError.message);
+  }
+
+  if (!routine) {
+    throw new Error("Rutina no encontrada.");
+  }
+
   const { data, error } = await supabase
     .from("workout_days")
     .insert({
@@ -59,13 +83,8 @@ export async function createWorkoutDay({
   return data as WorkoutDay;
 }
 
-export async function updateWorkoutDay({
-  dayId,
-  name,
-}: {
-  dayId: string;
-  name: string;
-}) {
+export async function updateWorkoutDay({ dayId, name }: { dayId: string; name: string }) {
+  const supabase = await createClient();
   const day = await getWorkoutDayById(dayId);
 
   if (!day) {
@@ -87,6 +106,7 @@ export async function updateWorkoutDay({
 }
 
 export async function archiveWorkoutDay(dayId: string) {
+  const supabase = await createClient();
   const day = await getWorkoutDayById(dayId);
 
   if (!day) {
@@ -104,6 +124,7 @@ export async function archiveWorkoutDay(dayId: string) {
 }
 
 export async function duplicateWorkoutDay(dayId: string) {
+  const supabase = await createClient();
   const day = await getWorkoutDayById(dayId);
 
   if (!day) {
@@ -169,6 +190,7 @@ export async function moveWorkoutDay({
   dayId: string;
   direction: "up" | "down";
 }) {
+  const supabase = await createClient();
   const days = await getDaysByRoutine(routineId);
   const index = days.findIndex((day) => day.id === dayId);
 
@@ -186,14 +208,8 @@ export async function moveWorkoutDay({
   const target = days[targetIndex];
 
   const [{ error: currentError }, { error: targetError }] = await Promise.all([
-    supabase
-      .from("workout_days")
-      .update({ order_index: target.order_index })
-      .eq("id", current.id),
-    supabase
-      .from("workout_days")
-      .update({ order_index: current.order_index })
-      .eq("id", target.id),
+    supabase.from("workout_days").update({ order_index: target.order_index }).eq("id", current.id),
+    supabase.from("workout_days").update({ order_index: current.order_index }).eq("id", target.id),
   ]);
 
   if (currentError) {
