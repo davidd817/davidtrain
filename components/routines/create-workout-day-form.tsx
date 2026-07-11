@@ -19,45 +19,38 @@ export function CreateWorkoutDayForm({
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const cleanName = name.trim();
 
-    if (!name.trim()) {
-      setError("El nombre del día es obligatorio.");
+    if (cleanName.length < 2) {
+      setError("El nombre del dia debe tener al menos 2 caracteres.");
       return;
     }
 
     try {
       setIsSubmitting(true);
       setError("");
-
       await createWorkoutDay({
         routineId,
-        name: name.trim(),
+        name: cleanName,
         orderIndex: nextOrderIndex,
       });
-
       setName("");
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error creando el día.");
+      setError(err instanceof Error ? err.message : "Error creando el dia.");
     } finally {
       setIsSubmitting(false);
     }
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="space-y-3 rounded-2xl border bg-white p-4 shadow-sm"
-    >
+    <form onSubmit={handleSubmit} className="space-y-3 rounded-2xl border bg-white p-4 shadow-sm">
       <div>
-        <label className="mb-1 block text-sm font-medium">
-          Nuevo día de rutina
-        </label>
-
+        <label className="mb-1 block text-sm font-medium">Nuevo dia de rutina</label>
         <input
           value={name}
           onChange={(event) => setName(event.target.value)}
-          placeholder="Ej: Día 1 - Upper"
+          placeholder="Ej: Dia 1 - Upper"
           className="w-full rounded-xl border px-3 py-2"
         />
       </div>
@@ -67,9 +60,9 @@ export function CreateWorkoutDayForm({
       <button
         type="submit"
         disabled={isSubmitting}
-        className="w-full rounded-xl bg-slate-900 px-4 py-3 text-sm font-medium text-white disabled:opacity-50"
+        className="w-full rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
       >
-        {isSubmitting ? "Creando..." : "Añadir día"}
+        {isSubmitting ? "Creando..." : "Anadir dia"}
       </button>
     </form>
   );

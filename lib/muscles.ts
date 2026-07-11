@@ -2,13 +2,13 @@ export const MUSCLE_GROUPS = [
   "Pecho",
   "Espalda",
   "Hombro",
-  "Bíceps",
-  "Tríceps",
-  "Cuádriceps",
+  "Biceps",
+  "Triceps",
+  "Cuadriceps",
   "Isquios",
-  "Glúteos",
+  "Gluteos",
   "Gemelos",
   "Aductor",
   "Abdomen",
-  "Cardio"
+  "Cardio",
 ];

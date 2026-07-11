@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 const fs = require("fs");
 const path = require("path");
 const dotenv = require("dotenv");
@@ -8,7 +9,7 @@ dotenv.config({ path: ".env.local" });
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-// PEGA AQUÍ TU UUID REAL DE SUPABASE AUTH
+// PEGA AQUI TU UUID REAL DE SUPABASE AUTH
 const DEV_USER_ID = "4c132550-3afb-4323-9d59-dd6f4ae936ac";
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
@@ -128,7 +129,7 @@ async function main() {
     throw new Error(error.message);
   }
 
-  console.log("Importación completada correctamente.");
+  console.log("Importacion completada correctamente.");
 }
 
 main();

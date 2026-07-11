@@ -1,5 +1,7 @@
 import { DEV_USER_ID } from "@/lib/config";
 import { supabase } from "@/lib/supabase";
+import { secondsBetween } from "@/lib/format";
+import type { ExerciseLog } from "@/lib/types";
 
 export type WorkoutSessionHistoryItem = {
   id: string;
@@ -7,16 +9,40 @@ export type WorkoutSessionHistoryItem = {
   completed_at: string | null;
   routine_id: string | null;
   day_id: string | null;
-  workout_routines: {
-    name: string;
-  } | null;
-  workout_days: {
-    name: string;
-  } | null;
+  duration_seconds: number | null;
+  workout_routines: { name: string } | null;
+  workout_days: { name: string } | null;
+  exercise_count: number;
+  set_count: number;
 };
 
-export async function getWorkoutHistory(): Promise<WorkoutSessionHistoryItem[]> {
-  const { data, error } = await supabase
+export type WorkoutSessionDetail = {
+  session: WorkoutSessionHistoryItem;
+  logs: Array<
+    ExerciseLog & {
+      exercises: {
+        name: string;
+        primary_muscle: string | null;
+        secondary_muscle: string | null;
+      } | null;
+    }
+  >;
+};
+
+function normalizeRelation<T>(value: T | T[] | null | undefined): T | null {
+  if (Array.isArray(value)) {
+    return value[0] ?? null;
+  }
+
+  return value ?? null;
+}
+
+export async function getWorkoutHistory({
+  status = "all",
+}: {
+  status?: "all" | "completed" | "open";
+} = {}): Promise<WorkoutSessionHistoryItem[]> {
+  let query = supabase
     .from("workout_sessions")
     .select(
       `
@@ -25,43 +51,74 @@ export async function getWorkoutHistory(): Promise<WorkoutSessionHistoryItem[]> 
       completed_at,
       routine_id,
       day_id,
-      workout_routines (
-        name
-      ),
-      workout_days (
-        name
-      )
+      duration_seconds,
+      workout_routines ( name ),
+      workout_days ( name )
     `
     )
     .eq("user_id", DEV_USER_ID)
     .order("started_at", { ascending: false });
 
+  if (status === "completed") {
+    query = query.not("completed_at", "is", null);
+  }
+
+  if (status === "open") {
+    query = query.is("completed_at", null);
+  }
+
+  const { data, error } = await query;
+
   if (error) {
     throw new Error(error.message);
   }
 
-  return data ?? [];
+  const sessions = (data ?? []) as Array<
+    Omit<WorkoutSessionHistoryItem, "workout_routines" | "workout_days" | "exercise_count" | "set_count"> & {
+      workout_routines: { name: string } | { name: string }[] | null;
+      workout_days: { name: string } | { name: string }[] | null;
+    }
+  >;
+
+  if (sessions.length === 0) {
+    return [];
+  }
+
+  const sessionIds = sessions.map((session) => session.id);
+
+  const { data: logs, error: logsError } = await supabase
+    .from("exercise_logs")
+    .select("session_id,exercise_id")
+    .in("session_id", sessionIds);
+
+  if (logsError) {
+    throw new Error(logsError.message);
+  }
+
+  return sessions.map((session) => {
+    const sessionLogs = (logs ?? []).filter((log) => log.session_id === session.id);
+    const exercises = new Set(sessionLogs.map((log) => log.exercise_id));
+
+    return {
+      ...session,
+      duration_seconds:
+        session.duration_seconds ?? secondsBetween(session.started_at, session.completed_at),
+      workout_routines: normalizeRelation(session.workout_routines),
+      workout_days: normalizeRelation(session.workout_days),
+      exercise_count: exercises.size,
+      set_count: sessionLogs.length,
+    };
+  });
 }
 
-export async function getWorkoutSessionDetail(sessionId: string) {
-  const { data: session, error: sessionError } = await supabase
-    .from("workout_sessions")
-    .select(
-      `
-      *,
-      workout_routines (
-        name
-      ),
-      workout_days (
-        name
-      )
-    `
-    )
-    .eq("id", sessionId)
-    .single();
+export async function getWorkoutSessionDetail(
+  sessionId: string
+): Promise<WorkoutSessionDetail | null> {
+  const history = await getWorkoutHistory();
+  const session = history.find((item) => item.id === sessionId) ?? null;
 
-  if (sessionError) {
-    throw new Error(sessionError.message);
+  if (!session) {
+    return null;
   }
 
   const { data: logs, error: logsError } = await supabase
@@ -85,6 +142,6 @@ export async function getWorkoutSessionDetail(sessionId: string) {
 
   return {
     session,
-    logs: logs ?? [],
+    logs: (logs ?? []) as WorkoutSessionDetail["logs"],
   };
 }

@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Personal Trainer App",
-  description: "App personal de entrenamiento y nutrición",
+  description: "App personal de entrenamiento",
 };
 
 export default function RootLayout({

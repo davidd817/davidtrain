@@ -1,30 +1,21 @@
 import { supabase } from "@/lib/supabase";
+import type { ExerciseLog } from "@/lib/types";
 
-export type ExerciseLog = {
-  id: string;
-  session_id: string;
-  exercise_id: string;
-  set_number: number;
-  weight: number;
-  reps: number;
-  rir: number;
-  created_at: string;
-};
+export type { ExerciseLog };
 
-export async function getExerciseLogsBySession(
-  sessionId: string
-): Promise<ExerciseLog[]> {
+export async function getExerciseLogsBySession(sessionId: string): Promise<ExerciseLog[]> {
   const { data, error } = await supabase
     .from("exercise_logs")
     .select("*")
     .eq("session_id", sessionId)
-    .order("created_at", { ascending: true });
+    .order("exercise_id", { ascending: true })
+    .order("set_number", { ascending: true });
 
   if (error) {
     throw new Error(error.message);
   }
 
-  return data ?? [];
+  return (data ?? []) as ExerciseLog[];
 }
 
 export async function saveExerciseSet({
@@ -64,5 +55,5 @@ export async function saveExerciseSet({
     throw new Error(error.message);
   }
 
-  return data;
+  return data as ExerciseLog;
 }
