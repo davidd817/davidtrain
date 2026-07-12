@@ -5,7 +5,7 @@
 Set these in Vercel Project Settings:
 
 - `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
 - `NEXT_PUBLIC_SITE_URL`
 
 Use the production URL for `NEXT_PUBLIC_SITE_URL`, for example `https://your-app.vercel.app`.
