@@ -1,28 +1,53 @@
 "use client";
 
 import Link from "next/link";
+import type { FormEvent, ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Archive, BarChart3, ExternalLink, PenLine, Star, Trash2 } from "lucide-react";
+import {
+  Archive,
+  BarChart3,
+  CopyPlus,
+  ExternalLink,
+  PenLine,
+  Star,
+  Trash2,
+} from "lucide-react";
 
 import {
   archiveExercise,
   deleteExerciseIfUnused,
+  personalizeGlobalExercise,
   setExerciseFavorite,
   updateExercise,
 } from "@/lib/exercises";
 import type { Exercise } from "@/lib/types";
 
+type LibraryTab = "all" | "base" | "mine" | "favorites";
+
+const tabs: Array<{ id: LibraryTab; label: string }> = [
+  { id: "all", label: "Todos" },
+  { id: "base", label: "Biblioteca base" },
+  { id: "mine", label: "Mis ejercicios" },
+  { id: "favorites", label: "Favoritos" },
+];
+
 export function ExerciseLibraryClient({ exercises }: { exercises: Exercise[] }) {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [muscle, setMuscle] = useState("");
-  const [favoriteOnly, setFavoriteOnly] = useState(false);
+  const [region, setRegion] = useState("");
+  const [tab, setTab] = useState<LibraryTab>("all");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
 
   const muscles = useMemo(() => {
     return Array.from(new Set(exercises.map((item) => item.primary_muscle).filter(Boolean))).sort() as string[];
+  }, [exercises]);
+
+  const regions = useMemo(() => {
+    return Array.from(new Set(exercises.map((item) => item.secondary_muscle).filter(Boolean))).sort() as string[];
   }, [exercises]);
 
   const filtered = useMemo(() => {
@@ -32,18 +57,31 @@ export function ExerciseLibraryClient({ exercises }: { exercises: Exercise[] }) 
       const matchesSearch =
         !term ||
         exercise.name.toLowerCase().includes(term) ||
+        (exercise.primary_muscle ?? "").toLowerCase().includes(term) ||
         (exercise.secondary_muscle ?? "").toLowerCase().includes(term);
       const matchesMuscle = muscle ? exercise.primary_muscle === muscle : true;
-      const matchesFavorite = favoriteOnly ? exercise.is_favorite : true;
+      const matchesRegion = region ? exercise.secondary_muscle === region : true;
+      const matchesTab =
+        tab === "all"
+          ? true
+          : tab === "base"
+            ? Boolean(exercise.is_global)
+            : tab === "mine"
+              ? !exercise.is_global
+              : exercise.is_favorite;
 
-      return matchesSearch && matchesMuscle && matchesFavorite;
+      return matchesSearch && matchesMuscle && matchesRegion && matchesTab;
     });
-  }, [exercises, favoriteOnly, muscle, search]);
+  }, [exercises, muscle, region, search, tab]);
 
-  async function run(callback: () => Promise<void>) {
+  async function run(callback: () => Promise<void>, successMessage?: string) {
     try {
       setError("");
+      setMessage("");
       await callback();
+      if (successMessage) {
+        setMessage(successMessage);
+      }
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo completar la accion.");
@@ -57,152 +95,214 @@ export function ExerciseLibraryClient({ exercises }: { exercises: Exercise[] }) 
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Buscar ejercicio..."
+            placeholder="Buscar ejercicio, musculo o region..."
             className="w-full rounded-xl border px-3 py-2"
           />
+
           <div className="grid grid-cols-2 gap-2">
             <select
               value={muscle}
               onChange={(event) => setMuscle(event.target.value)}
               className="rounded-xl border px-3 py-2 text-sm"
             >
-              <option value="">Todos</option>
+              <option value="">Todos los musculos</option>
               {muscles.map((item) => (
                 <option key={item} value={item}>
                   {item}
                 </option>
               ))}
             </select>
-            <button
-              type="button"
-              onClick={() => setFavoriteOnly((value) => !value)}
-              className={`rounded-xl border px-3 py-2 text-sm font-semibold ${
-                favoriteOnly ? "bg-slate-900 text-white" : "bg-white text-slate-900"
-              }`}
+            <select
+              value={region}
+              onChange={(event) => setRegion(event.target.value)}
+              className="rounded-xl border px-3 py-2 text-sm"
             >
-              Favoritos
-            </button>
+              <option value="">Todas las regiones</option>
+              {regions.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            {tabs.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setTab(item.id)}
+                className={`rounded-xl border px-3 py-2 text-sm font-semibold ${
+                  tab === item.id ? "bg-slate-900 text-white" : "bg-white text-slate-900"
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
           </div>
         </div>
+
         <p className="mt-3 text-sm text-slate-500">
           {filtered.length} de {exercises.length} ejercicios
         </p>
         {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
+        {message ? <p className="mt-2 text-sm text-emerald-700">{message}</p> : null}
       </div>
 
       {filtered.length === 0 ? (
         <div className="rounded-2xl border bg-white p-4 text-sm text-slate-500">
-          No hay ejercicios que coincidan con el filtro.
+          No hay ejercicios que coincidan con este filtro.
         </div>
       ) : (
         <div className="space-y-2">
-          {filtered.map((exercise) => (
-            <article key={exercise.id} className="rounded-2xl border bg-white p-4 shadow-sm">
-              {editingId === exercise.id ? (
-                <ExerciseEditForm
-                  exercise={exercise}
-                  onCancel={() => setEditingId(null)}
-                  onSave={async (input) => {
-                    await run(async () => {
-                      await updateExercise(input);
-                      setEditingId(null);
-                    });
-                  }}
-                />
-              ) : (
-                <>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <h3 className="truncate text-base font-bold">{exercise.name}</h3>
-                      <p className="mt-1 text-sm text-slate-500">
-                        {exercise.primary_muscle || "Sin musculo"}
-                        {exercise.secondary_muscle ? ` - ${exercise.secondary_muscle}` : ""}
-                      </p>
+          {filtered.map((exercise) => {
+            const isGlobal = Boolean(exercise.is_global);
+
+            return (
+              <article key={exercise.id} className="rounded-2xl border bg-white p-4 shadow-sm">
+                {editingId === exercise.id ? (
+                  <ExerciseEditForm
+                    exercise={exercise}
+                    onCancel={() => setEditingId(null)}
+                    onSave={async (input) => {
+                      await run(async () => {
+                        await updateExercise(input);
+                        setEditingId(null);
+                      }, "Ejercicio actualizado.");
+                    }}
+                  />
+                ) : (
+                  <>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="truncate text-base font-bold">{exercise.name}</h3>
+                          <span
+                            className={`rounded-full px-2 py-1 text-[11px] font-semibold ${
+                              isGlobal
+                                ? "bg-sky-100 text-sky-700"
+                                : "bg-emerald-100 text-emerald-700"
+                            }`}
+                          >
+                            {isGlobal ? "Base" : "Personal"}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-sm text-slate-500">
+                          {exercise.primary_muscle || "Sin musculo"}
+                          {exercise.secondary_muscle ? ` - ${exercise.secondary_muscle}` : ""}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        title="Favorito"
+                        aria-label="Favorito"
+                        onClick={() =>
+                          run(async () =>
+                            setExerciseFavorite({
+                              exerciseId: exercise.id,
+                              isFavorite: !exercise.is_favorite,
+                            })
+                          )
+                        }
+                        className="rounded-full bg-slate-100 p-2"
+                      >
+                        <Star
+                          className={`h-4 w-4 ${
+                            exercise.is_favorite ? "fill-amber-400 text-amber-500" : "text-slate-500"
+                          }`}
+                        />
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      title="Favorito"
-                      aria-label="Favorito"
-                      onClick={() =>
-                        run(async () =>
-                          setExerciseFavorite({
-                            exerciseId: exercise.id,
-                            isFavorite: !exercise.is_favorite,
-                          })
-                        )
-                      }
-                      className="rounded-full bg-slate-100 p-2"
-                    >
-                      <Star
-                        className={`h-4 w-4 ${
-                          exercise.is_favorite ? "fill-amber-400 text-amber-500" : "text-slate-500"
-                        }`}
-                      />
-                    </button>
-                  </div>
 
-                  {exercise.description ? (
-                    <p className="mt-3 text-sm text-slate-600">{exercise.description}</p>
-                  ) : null}
+                    {exercise.description ? (
+                      <p className="mt-3 text-sm text-slate-600">{exercise.description}</p>
+                    ) : null}
 
-                  {exercise.notes ? (
-                    <p className="mt-2 rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
-                      {exercise.notes}
-                    </p>
-                  ) : null}
+                    {exercise.notes ? (
+                      <p className="mt-2 rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
+                        {exercise.notes}
+                      </p>
+                    ) : null}
 
-                  <div className="mt-3 grid grid-cols-5 gap-2">
-                    <IconButton label="Editar" onClick={() => setEditingId(exercise.id)}>
-                      <PenLine className="h-4 w-4" />
-                    </IconButton>
-                    <Link
-                      title="Progreso"
-                      aria-label="Progreso"
-                      href={`/progress/${exercise.id}`}
-                      className="flex items-center justify-center rounded-xl border border-slate-200 px-3 py-2"
-                    >
-                      <BarChart3 className="h-4 w-4" />
-                    </Link>
-                    {exercise.youtube_url ? (
-                      <a
-                        title="Video"
-                        aria-label="Video"
-                        href={exercise.youtube_url}
-                        target="_blank"
-                        rel="noreferrer"
+                    <div className="mt-3 grid grid-cols-5 gap-2">
+                      {isGlobal ? (
+                        <IconButton
+                          label="Personalizar"
+                          onClick={() =>
+                            run(
+                              async () => void (await personalizeGlobalExercise(exercise.id)),
+                              "Copia personal creada."
+                            )
+                          }
+                        >
+                          <CopyPlus className="h-4 w-4" />
+                        </IconButton>
+                      ) : (
+                        <IconButton label="Editar" onClick={() => setEditingId(exercise.id)}>
+                          <PenLine className="h-4 w-4" />
+                        </IconButton>
+                      )}
+
+                      <Link
+                        title="Progreso"
+                        aria-label="Progreso"
+                        href={`/progress/${exercise.id}`}
                         className="flex items-center justify-center rounded-xl border border-slate-200 px-3 py-2"
                       >
-                        <ExternalLink className="h-4 w-4" />
-                      </a>
-                    ) : (
-                      <span className="rounded-xl border border-slate-100 px-3 py-2" />
-                    )}
-                    <IconButton
-                      label="Archivar"
-                      onClick={() => {
-                        if (window.confirm("Archivar este ejercicio?")) {
-                          void run(async () => archiveExercise(exercise.id));
-                        }
-                      }}
-                    >
-                      <Archive className="h-4 w-4" />
-                    </IconButton>
-                    <IconButton
-                      label="Eliminar"
-                      danger
-                      onClick={() => {
-                        if (window.confirm("Eliminar solo si no se usa en rutinas ni historial?")) {
-                          void run(async () => deleteExerciseIfUnused(exercise.id));
-                        }
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </IconButton>
-                  </div>
-                </>
-              )}
-            </article>
-          ))}
+                        <BarChart3 className="h-4 w-4" />
+                      </Link>
+
+                      {exercise.youtube_url ? (
+                        <a
+                          title="Video"
+                          aria-label="Video"
+                          href={exercise.youtube_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center justify-center rounded-xl border border-slate-200 px-3 py-2"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </a>
+                      ) : (
+                        <span className="rounded-xl border border-slate-100 px-3 py-2" />
+                      )}
+
+                      {!isGlobal ? (
+                        <IconButton
+                          label="Archivar"
+                          onClick={() => {
+                            if (window.confirm("Archivar este ejercicio personal?")) {
+                              void run(async () => archiveExercise(exercise.id), "Ejercicio archivado.");
+                            }
+                          }}
+                        >
+                          <Archive className="h-4 w-4" />
+                        </IconButton>
+                      ) : (
+                        <span className="rounded-xl border border-slate-100 px-3 py-2" />
+                      )}
+
+                      {!isGlobal ? (
+                        <IconButton
+                          label="Eliminar"
+                          danger
+                          onClick={() => {
+                            if (window.confirm("Eliminar solo si no se usa en rutinas ni historial?")) {
+                              void run(async () => deleteExerciseIfUnused(exercise.id), "Ejercicio eliminado.");
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </IconButton>
+                      ) : (
+                        <span className="rounded-xl border border-slate-100 px-3 py-2" />
+                      )}
+                    </div>
+                  </>
+                )}
+              </article>
+            );
+          })}
         </div>
       )}
     </section>
@@ -234,7 +334,7 @@ function ExerciseEditForm({
   const [notes, setNotes] = useState(exercise.notes ?? "");
   const [youtubeUrl, setYoutubeUrl] = useState(exercise.youtube_url ?? "");
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     await onSave({
       id: exercise.id,
@@ -277,7 +377,7 @@ function IconButton({
   onClick,
 }: {
   label: string;
-  children: React.ReactNode;
+  children: ReactNode;
   danger?: boolean;
   onClick: () => void;
 }) {

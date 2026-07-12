@@ -10,6 +10,8 @@ export type Exercise = {
   youtube_url: string | null;
   is_favorite: boolean;
   archived_at?: string | null;
+  is_global?: boolean;
+  source_exercise_id?: string | null;
 };
 
 export type Routine = {
@@ -43,7 +45,7 @@ export type PlannedExercise = {
   archived_at?: string | null;
   exercises: Pick<
     Exercise,
-    "id" | "name" | "primary_muscle" | "secondary_muscle" | "notes"
+    "id" | "name" | "primary_muscle" | "secondary_muscle" | "notes" | "is_global"
   > | null;
 };
 

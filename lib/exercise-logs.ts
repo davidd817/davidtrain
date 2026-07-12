@@ -63,7 +63,7 @@ export async function saveExerciseSet({
     .from("exercises")
     .select("id")
     .eq("id", exerciseId)
-    .eq("user_id", userId)
+    .or(`is_global.eq.true,user_id.eq.${userId}`)
     .maybeSingle();
 
   if (exerciseError) {

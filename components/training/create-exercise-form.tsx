@@ -1,5 +1,6 @@
 "use client";
 
+import type { FormEvent } from "react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -18,7 +19,7 @@ export function CreateExerciseForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setErrorMessage("");
     const cleanName = name.trim();
@@ -148,7 +149,7 @@ export function CreateExerciseForm() {
         disabled={isSubmitting}
         className="w-full rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
       >
-        {isSubmitting ? "Guardando..." : "Guardar ejercicio"}
+        {isSubmitting ? "Guardando..." : "Guardar ejercicio personal"}
       </button>
     </form>
   );

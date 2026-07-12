@@ -59,7 +59,8 @@ export async function getExercisesByDay(dayId: string): Promise<DayExercise[]> {
         name,
         primary_muscle,
         secondary_muscle,
-        notes
+        notes,
+        is_global
       ),
       workout_days!inner (
         workout_routines!inner (
@@ -109,7 +110,7 @@ export async function addExerciseToDay({
     .from("exercises")
     .select("id")
     .eq("id", exerciseId)
-    .eq("user_id", userId)
+    .or(`is_global.eq.true,user_id.eq.${userId}`)
     .maybeSingle();
 
   if (exerciseError) {
