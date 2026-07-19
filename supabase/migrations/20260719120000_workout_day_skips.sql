@@ -20,56 +20,53 @@ alter table public.workout_day_skips enable row level security;
 
 do $$
 begin
+  -- Cada usuario autenticado puede consultar únicamente sus propios saltos.
   if not exists (
-    select 1 from pg_policies
-     where schemaname = 'public' and tablename = 'workout_day_skips' and policyname = 'workout_day_skips_select_own'
+    select 1
+    from pg_policies
+    where schemaname = 'public'
+      and tablename = 'workout_day_skips'
+      and policyname = 'workout_day_skips_select_own'
   ) then
-    create policy workout_day_skips_select_own on public.workout_day_skips
-      for select to authenticated
-      using (user_id = auth.uid());
+    create policy workout_day_skips_select_own
+      on public.workout_day_skips
+      for select
+      to authenticated
+      using (user_id = (select auth.uid()));
   end if;
 
+  -- Cada usuario puede registrar un salto solamente para:
+  -- 1. Su propio usuario.
+  -- 2. Una rutina que le pertenezca.
+  -- 3. Un día que pertenezca realmente a esa rutina.
   if not exists (
-    select 1 from pg_policies
-     where schemaname = 'public' and tablename = 'workout_day_skips' and policyname = 'workout_day_skips_insert_own'
+    select 1
+    from pg_policies
+    where schemaname = 'public'
+      and tablename = 'workout_day_skips'
+      and policyname = 'workout_day_skips_insert_own'
   ) then
-    create policy workout_day_skips_insert_own on public.workout_day_skips
-      for insert to authenticated
+    create policy workout_day_skips_insert_own
+      on public.workout_day_skips
+      for insert
+      to authenticated
       with check (
-        user_id = auth.uid()
+        user_id = (select auth.uid())
         and exists (
           select 1
-            from public.workout_routines r
-           where r.id = routine_id
-             and r.user_id = auth.uid()
+          from public.workout_routines r
+          where r.id = routine_id
+            and r.user_id = (select auth.uid())
         )
         and exists (
           select 1
-            from public.workout_days d
-            join public.workout_routines r on r.id = d.routine_id
-           where d.id = day_id
-             and d.routine_id = routine_id
-             and r.user_id = auth.uid()
+          from public.workout_days d
+          join public.workout_routines r
+            on r.id = d.routine_id
+          where d.id = day_id
+            and d.routine_id = routine_id
+            and r.user_id = (select auth.uid())
         )
       );
-  end if;
-
-  if not exists (
-    select 1 from pg_policies
-     where schemaname = 'public' and tablename = 'workout_day_skips' and policyname = 'workout_day_skips_update_own'
-  ) then
-    create policy workout_day_skips_update_own on public.workout_day_skips
-      for update to authenticated
-      using (user_id = auth.uid())
-      with check (user_id = auth.uid());
-  end if;
-
-  if not exists (
-    select 1 from pg_policies
-     where schemaname = 'public' and tablename = 'workout_day_skips' and policyname = 'workout_day_skips_delete_own'
-  ) then
-    create policy workout_day_skips_delete_own on public.workout_day_skips
-      for delete to authenticated
-      using (user_id = auth.uid());
   end if;
 end $$;
