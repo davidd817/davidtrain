@@ -2,16 +2,16 @@ import Link from "next/link";
 import {
   ArrowRight,
   BookOpen,
-  Clock3,
   Dumbbell,
   History,
   LineChart,
   Play,
 } from "lucide-react";
 
+import { SkipTrainingDayButton } from "@/components/dashboard/skip-training-day-button";
 import { StartWorkoutButton } from "@/components/dashboard/start-workout-button";
 import { AppShell } from "@/components/layout/app-shell";
-import { formatDateTime, formatDuration, secondsBetween } from "@/lib/format";
+import { formatDateTime } from "@/lib/format";
 import { getExercisesByDay } from "@/lib/day-exercises";
 import { getTrainingState } from "@/lib/training-state";
 import { getDaysByRoutine } from "@/lib/workout-days";
@@ -73,11 +73,10 @@ export default async function DashboardPage() {
                   {openSession.workout_days?.name ?? "Entrenamiento"}
                 </h2>
                 <p className="mt-1 text-sm text-amber-800/80">
-                  {openSession.workout_routines?.name ?? "Sin rutina"} -{" "}
-                  {formatDuration(secondsBetween(openSession.started_at, null))}
+                  {openSession.workout_routines?.name ?? "Sin rutina"}
                 </p>
               </div>
-              <Clock3 className="h-6 w-6 text-amber-700" />
+              <ArrowRight className="h-6 w-6 text-amber-700" />
             </div>
 
             <Link
@@ -113,7 +112,10 @@ export default async function DashboardPage() {
             </div>
 
             {todayDay && state?.active_routine_id ? (
-              <StartWorkoutButton routineId={state.active_routine_id} dayId={todayDay.id} />
+              <>
+                <StartWorkoutButton routineId={state.active_routine_id} dayId={todayDay.id} />
+                <SkipTrainingDayButton />
+              </>
             ) : (
               <Link
                 href="/routines"
@@ -152,19 +154,10 @@ export default async function DashboardPage() {
               <p className="mt-1 text-sm text-slate-500">
                 {latestCompleted.workout_routines?.name ?? "Sin rutina"}
               </p>
-              <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+              <div className="mt-3 grid grid-cols-1 gap-2 text-sm">
                 <div className="rounded-xl bg-slate-50 p-3">
                   <p className="text-xs text-slate-500">Fecha</p>
                   <p className="font-semibold">{formatDateTime(latestCompleted.completed_at)}</p>
-                </div>
-                <div className="rounded-xl bg-slate-50 p-3">
-                  <p className="text-xs text-slate-500">Duracion</p>
-                  <p className="font-semibold">
-                    {formatDuration(
-                      latestCompleted.duration_seconds ??
-                        secondsBetween(latestCompleted.started_at, latestCompleted.completed_at)
-                    )}
-                  </p>
                 </div>
               </div>
             </>

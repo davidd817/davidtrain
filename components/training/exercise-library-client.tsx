@@ -32,6 +32,22 @@ const tabs: Array<{ id: LibraryTab; label: string }> = [
   { id: "favorites", label: "Favoritos" },
 ];
 
+function matchesLibraryTab(exercise: Exercise, tab: LibraryTab) {
+  if (tab === "base") {
+    return Boolean(exercise.is_global);
+  }
+
+  if (tab === "mine") {
+    return !exercise.is_global;
+  }
+
+  if (tab === "favorites") {
+    return exercise.is_favorite;
+  }
+
+  return true;
+}
+
 export function ExerciseLibraryClient({ exercises }: { exercises: Exercise[] }) {
   const router = useRouter();
   const [search, setSearch] = useState("");
@@ -47,8 +63,31 @@ export function ExerciseLibraryClient({ exercises }: { exercises: Exercise[] }) 
   }, [exercises]);
 
   const regions = useMemo(() => {
-    return Array.from(new Set(exercises.map((item) => item.secondary_muscle).filter(Boolean))).sort() as string[];
-  }, [exercises]);
+    if (!muscle) {
+      return [];
+    }
+
+    const term = search.trim().toLowerCase();
+
+    return Array.from(
+      new Set(
+        exercises
+          .filter((item) => matchesLibraryTab(item, tab))
+          .filter((item) => item.primary_muscle === muscle)
+          .filter((item) =>
+            term
+              ? item.name.toLowerCase().includes(term) ||
+                (item.primary_muscle ?? "").toLowerCase().includes(term) ||
+                (item.secondary_muscle ?? "").toLowerCase().includes(term)
+              : true
+          )
+          .map((item) => item.secondary_muscle)
+          .filter(Boolean)
+      )
+    ).sort() as string[];
+  }, [exercises, muscle, search, tab]);
+
+  const activeRegion = region && regions.includes(region) ? region : "";
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -60,19 +99,10 @@ export function ExerciseLibraryClient({ exercises }: { exercises: Exercise[] }) 
         (exercise.primary_muscle ?? "").toLowerCase().includes(term) ||
         (exercise.secondary_muscle ?? "").toLowerCase().includes(term);
       const matchesMuscle = muscle ? exercise.primary_muscle === muscle : true;
-      const matchesRegion = region ? exercise.secondary_muscle === region : true;
-      const matchesTab =
-        tab === "all"
-          ? true
-          : tab === "base"
-            ? Boolean(exercise.is_global)
-            : tab === "mine"
-              ? !exercise.is_global
-              : exercise.is_favorite;
-
-      return matchesSearch && matchesMuscle && matchesRegion && matchesTab;
+      const matchesRegion = activeRegion ? exercise.secondary_muscle === activeRegion : true;
+      return matchesSearch && matchesMuscle && matchesRegion && matchesLibraryTab(exercise, tab);
     });
-  }, [exercises, muscle, region, search, tab]);
+  }, [activeRegion, exercises, muscle, search, tab]);
 
   async function run(callback: () => Promise<void>, successMessage?: string) {
     try {
@@ -102,7 +132,10 @@ export function ExerciseLibraryClient({ exercises }: { exercises: Exercise[] }) 
           <div className="grid grid-cols-2 gap-2">
             <select
               value={muscle}
-              onChange={(event) => setMuscle(event.target.value)}
+              onChange={(event) => {
+                setMuscle(event.target.value);
+                setRegion("");
+              }}
               className="rounded-xl border px-3 py-2 text-sm"
             >
               <option value="">Todos los musculos</option>
@@ -113,11 +146,12 @@ export function ExerciseLibraryClient({ exercises }: { exercises: Exercise[] }) 
               ))}
             </select>
             <select
-              value={region}
+              value={activeRegion}
               onChange={(event) => setRegion(event.target.value)}
-              className="rounded-xl border px-3 py-2 text-sm"
+              disabled={!muscle}
+              className="rounded-xl border px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-400"
             >
-              <option value="">Todas las regiones</option>
+              <option value="">{muscle ? "Todas las regiones" : "Elige musculo"}</option>
               {regions.map((item) => (
                 <option key={item} value={item}>
                   {item}

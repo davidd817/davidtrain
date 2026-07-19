@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { AppShell } from "@/components/layout/app-shell";
-import { formatDateTime, formatDuration } from "@/lib/format";
+import { formatDateTime } from "@/lib/format";
 import { getWorkoutSessionDetail } from "@/lib/history";
 
 export const dynamic = "force-dynamic";
@@ -75,8 +75,7 @@ export default async function HistoryDetailPage({ params }: Props) {
         <p className="mt-2 text-sm text-slate-500">{formatDateTime(session.started_at)}</p>
       </header>
 
-      <section className="mb-5 grid grid-cols-3 gap-2">
-        <Stat label="Duracion" value={formatDuration(session.duration_seconds)} />
+      <section className="mb-5 grid grid-cols-2 gap-2">
         <Stat label="Ejercicios" value={String(session.exercise_count)} />
         <Stat label="Series" value={String(session.set_count)} />
       </section>

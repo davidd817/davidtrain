@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
 import { AppShell } from "@/components/layout/app-shell";
-import { formatDateTime, formatDuration } from "@/lib/format";
+import { formatDateTime } from "@/lib/format";
 import { getWorkoutHistory } from "@/lib/history";
 import { getProgressSummaries } from "@/lib/progress";
 
@@ -101,8 +101,7 @@ export default async function ProgressPage() {
                     {session.completed_at ? "Completada" : "Abierta"}
                   </span>
                 </div>
-                <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
-                  <Info label="Duracion" value={formatDuration(session.duration_seconds)} />
+                <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
                   <Info label="Ejercicios" value={String(session.exercise_count)} />
                   <Info label="Series" value={String(session.set_count)} />
                 </div>

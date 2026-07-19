@@ -22,27 +22,26 @@ export async function getExerciseLogsBySession(sessionId: string): Promise<Exerc
   return (data ?? []) as ExerciseLog[];
 }
 
-export async function saveExerciseSet({
-  sessionId,
-  exerciseId,
-  setNumber,
-  weight,
-  reps,
-  rir,
-}: {
-  sessionId: string;
-  exerciseId: string;
+type SaveExerciseSetInput = {
   setNumber: number;
   weight: number;
   reps: number;
   rir: number;
+};
+
+async function assertEditableSessionExercise({
+  sessionId,
+  exerciseId,
+}: {
+  sessionId: string;
+  exerciseId: string;
 }) {
   const supabase = await createClient();
   const userId = await getUserId();
 
   const { data: session, error: sessionError } = await supabase
     .from("workout_sessions")
-    .select("id, completed_at")
+    .select("id, day_id, completed_at")
     .eq("id", sessionId)
     .eq("user_id", userId)
     .maybeSingle();
@@ -57,6 +56,10 @@ export async function saveExerciseSet({
 
   if (session.completed_at) {
     throw new Error("No se puede editar una sesion finalizada.");
+  }
+
+  if (!session.day_id) {
+    throw new Error("La sesion no tiene dia asociado.");
   }
 
   const { data: exercise, error: exerciseError } = await supabase
@@ -74,6 +77,62 @@ export async function saveExerciseSet({
     throw new Error("Ejercicio no encontrado.");
   }
 
+  const { data: planned, error: plannedError } = await supabase
+    .from("exercises_in_day")
+    .select("id, workout_days!inner(workout_routines!inner(user_id))")
+    .eq("day_id", session.day_id)
+    .eq("exercise_id", exerciseId)
+    .eq("workout_days.workout_routines.user_id", userId)
+    .is("archived_at", null)
+    .limit(1)
+    .maybeSingle();
+
+  if (plannedError) {
+    throw new Error(plannedError.message);
+  }
+
+  if (!planned) {
+    throw new Error("Este ejercicio no pertenece al dia de la sesion.");
+  }
+}
+
+function assertValidSet(set: SaveExerciseSetInput) {
+  if (!Number.isInteger(set.setNumber) || set.setNumber < 1 || set.setNumber > 50) {
+    throw new Error("Numero de serie no valido.");
+  }
+
+  if (!Number.isFinite(set.weight) || set.weight < 0 || set.weight > 1000) {
+    throw new Error("Peso: debe estar entre 0 y 1000.");
+  }
+
+  if (!Number.isInteger(set.reps) || set.reps < 1 || set.reps > 100) {
+    throw new Error("Reps: debe estar entre 1 y 100.");
+  }
+
+  if (!Number.isInteger(set.rir) || set.rir < 0 || set.rir > 10) {
+    throw new Error("RIR: debe estar entre 0 y 10.");
+  }
+}
+
+export async function saveExerciseSet({
+  sessionId,
+  exerciseId,
+  setNumber,
+  weight,
+  reps,
+  rir,
+}: {
+  sessionId: string;
+  exerciseId: string;
+  setNumber: number;
+  weight: number;
+  reps: number;
+  rir: number;
+}) {
+  await assertEditableSessionExercise({ sessionId, exerciseId });
+  assertValidSet({ setNumber, weight, reps, rir });
+
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("exercise_logs")
     .upsert(
@@ -97,4 +156,47 @@ export async function saveExerciseSet({
   }
 
   return data as ExerciseLog;
+}
+
+export async function saveExerciseSets({
+  sessionId,
+  exerciseId,
+  sets,
+}: {
+  sessionId: string;
+  exerciseId: string;
+  sets: SaveExerciseSetInput[];
+}) {
+  if (sets.length === 0) {
+    return [];
+  }
+
+  await assertEditableSessionExercise({ sessionId, exerciseId });
+
+  for (const set of sets) {
+    assertValidSet(set);
+  }
+
+  const supabase = await createClient();
+  const rows = sets.map((set) => ({
+    session_id: sessionId,
+    exercise_id: exerciseId,
+    set_number: set.setNumber,
+    weight: set.weight,
+    reps: set.reps,
+    rir: set.rir,
+  }));
+
+  const { data, error } = await supabase
+    .from("exercise_logs")
+    .upsert(rows, {
+      onConflict: "session_id,exercise_id,set_number",
+    })
+    .select();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as ExerciseLog[];
 }

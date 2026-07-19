@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient, getUserId } from "@/lib/supabase/server";
+import { getDaysByRoutine } from "@/lib/workout-days";
 
 type TrainingState = {
   user_id: string;
@@ -81,4 +82,71 @@ export async function clearActiveRoutine() {
   if (error) {
     throw new Error(error.message);
   }
+}
+export async function skipCurrentTrainingDay(reason?: string) {
+  const supabase = await createClient();
+  const userId = await getUserId();
+
+  const state = await getTrainingState();
+
+  if (!state?.active_routine_id) {
+    throw new Error("No hay una rutina activa para saltar.");
+  }
+
+  const { data: openSession, error: openSessionError } = await supabase
+    .from("workout_sessions")
+    .select("id")
+    .eq("user_id", userId)
+    .is("completed_at", null)
+    .limit(1)
+    .maybeSingle();
+
+  if (openSessionError) {
+    throw new Error(openSessionError.message);
+  }
+
+  if (openSession) {
+    throw new Error("Hay una sesion abierta. Continuala o finalizala antes de saltar el dia.");
+  }
+
+  const days = await getDaysByRoutine(state.active_routine_id);
+
+  if (days.length === 0) {
+    throw new Error("La rutina activa no tiene dias configurados.");
+  }
+
+  const currentDay = days[state.next_day_index] ?? days[0];
+  const currentIndex = days.findIndex((day) => day.id === currentDay.id);
+  const nextDayIndex = (Math.max(0, currentIndex) + 1) % days.length;
+  const skippedAt = new Date().toISOString();
+
+  const { error: skipError } = await supabase.from("workout_day_skips").insert({
+    user_id: userId,
+    routine_id: state.active_routine_id,
+    day_id: currentDay.id,
+    skipped_at: skippedAt,
+    reason: reason?.trim() || null,
+  });
+
+  if (skipError) {
+    throw new Error(skipError.message);
+  }
+
+  const { error: updateError } = await supabase
+    .from("user_training_state")
+    .update({
+      next_day_index: nextDayIndex,
+      updated_at: skippedAt,
+    })
+    .eq("user_id", userId)
+    .eq("active_routine_id", state.active_routine_id);
+
+  if (updateError) {
+    throw new Error(updateError.message);
+  }
+
+  return {
+    skippedDayName: currentDay.name,
+    nextDayName: days[nextDayIndex]?.name ?? days[0]?.name ?? "siguiente dia",
+  };
 }

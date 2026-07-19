@@ -290,13 +290,15 @@ type PreviousExercisePerformance = {
 export async function getPreviousExercisePerformances({
   exerciseIds,
   currentSessionId,
+  currentDayId,
   beforeStartedAt,
 }: {
   exerciseIds: string[];
   currentSessionId: string;
+  currentDayId: string | null;
   beforeStartedAt: string;
 }) {
-  if (exerciseIds.length === 0) {
+  if (exerciseIds.length === 0 || !currentDayId) {
     return new Map<string, PreviousExercisePerformance>();
   }
 
@@ -311,7 +313,9 @@ export async function getPreviousExercisePerformances({
       workout_sessions!inner (
         id,
         user_id,
+        day_id,
         started_at,
+        completed_at,
         workout_routines ( name ),
         workout_days ( name )
       )
@@ -321,6 +325,8 @@ export async function getPreviousExercisePerformances({
     .neq("session_id", currentSessionId)
     .lt("workout_sessions.started_at", beforeStartedAt)
     .eq("workout_sessions.user_id", userId)
+    .eq("workout_sessions.day_id", currentDayId)
+    .not("workout_sessions.completed_at", "is", null)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -331,12 +337,19 @@ export async function getPreviousExercisePerformances({
     ExerciseLog & {
       workout_sessions: {
         id: string;
+        day_id: string | null;
         started_at: string;
+        completed_at: string | null;
         workout_routines: { name: string } | null;
         workout_days: { name: string } | null;
       };
     }
   >;
+
+  rows.sort((a, b) => {
+    const bySessionDate = b.workout_sessions.started_at.localeCompare(a.workout_sessions.started_at);
+    return bySessionDate || a.set_number - b.set_number;
+  });
 
   const byExercise = new Map<string, PreviousExercisePerformance>();
 

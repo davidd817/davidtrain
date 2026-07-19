@@ -35,7 +35,7 @@ alter table public.user_exercise_favorites enable row level security;
 
 do $$
 declare
-  david_user_id uuid := '4c132550-3afb-4323-9d59-dd6f4ae936ac';
+  david_user_id uuid := '00000000-0000-0000-0000-000000000000';
 begin
   if david_user_id = '00000000-0000-0000-0000-000000000000' then
     raise exception 'Replace david_user_id with David auth.users.id before running this migration.';

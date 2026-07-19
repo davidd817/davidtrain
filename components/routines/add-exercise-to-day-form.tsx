@@ -39,10 +39,30 @@ export function AddExerciseToDayForm({
   }, [exercises]);
 
   const regions = useMemo(() => {
+    if (!muscleFilter) {
+      return [];
+    }
+
+    const term = search.trim().toLowerCase();
+
     return Array.from(
-      new Set(exercises.map((exercise) => exercise.secondary_muscle).filter(Boolean))
+      new Set(
+        exercises
+          .filter((exercise) => exercise.primary_muscle === muscleFilter)
+          .filter((exercise) =>
+            term
+              ? exercise.name.toLowerCase().includes(term) ||
+                (exercise.primary_muscle ?? "").toLowerCase().includes(term) ||
+                (exercise.secondary_muscle ?? "").toLowerCase().includes(term)
+              : true
+          )
+          .map((exercise) => exercise.secondary_muscle)
+          .filter(Boolean)
+      )
     ).sort() as string[];
-  }, [exercises]);
+  }, [exercises, muscleFilter, search]);
+
+  const activeRegionFilter = regionFilter && regions.includes(regionFilter) ? regionFilter : "";
 
   const filteredExercises = useMemo(() => {
     const term = search.toLowerCase();
@@ -54,12 +74,12 @@ export function AddExerciseToDayForm({
           (exercise.primary_muscle ?? "").toLowerCase().includes(term) ||
           (exercise.secondary_muscle ?? "").toLowerCase().includes(term);
         const matchesMuscle = muscleFilter ? exercise.primary_muscle === muscleFilter : true;
-        const matchesRegion = regionFilter ? exercise.secondary_muscle === regionFilter : true;
+        const matchesRegion = activeRegionFilter ? exercise.secondary_muscle === activeRegionFilter : true;
 
         return matchesSearch && matchesMuscle && matchesRegion;
       })
       .slice(0, 60);
-  }, [exercises, search, muscleFilter, regionFilter]);
+  }, [activeRegionFilter, exercises, search, muscleFilter]);
 
   const selectedExercise = exercises.find((exercise) => exercise.id === selectedExerciseId);
 
@@ -148,7 +168,10 @@ export function AddExerciseToDayForm({
           <label className="mb-1 block text-sm font-medium">Grupo</label>
           <select
             value={muscleFilter}
-            onChange={(event) => setMuscleFilter(event.target.value)}
+            onChange={(event) => {
+              setMuscleFilter(event.target.value);
+              setRegionFilter("");
+            }}
             className="w-full rounded-xl border px-3 py-2"
           >
             <option value="">Todos</option>
@@ -162,11 +185,12 @@ export function AddExerciseToDayForm({
         <div>
           <label className="mb-1 block text-sm font-medium">Region</label>
           <select
-            value={regionFilter}
+            value={activeRegionFilter}
             onChange={(event) => setRegionFilter(event.target.value)}
-            className="w-full rounded-xl border px-3 py-2"
+            disabled={!muscleFilter}
+            className="w-full rounded-xl border px-3 py-2 disabled:bg-slate-100 disabled:text-slate-400"
           >
-            <option value="">Todas</option>
+            <option value="">{muscleFilter ? "Todas" : "Elige grupo"}</option>
             {regions.map((region) => (
               <option key={region} value={region}>
                 {region}
