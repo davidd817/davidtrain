@@ -58,6 +58,11 @@ export type WorkoutSession = {
   completed_at: string | null;
   duration_seconds?: number | null;
   completed_day_advanced_at?: string | null;
+  completed_day_index?: number | null;
+  resulting_next_day_index?: number | null;
+  status?: "in_progress" | "completed" | "cancelled" | null;
+  cancelled_at?: string | null;
+  cancellation_reason?: string | null;
 };
 
 export type ExerciseLog = {

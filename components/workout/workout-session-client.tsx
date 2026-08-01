@@ -47,6 +47,7 @@ type DraftSet = {
 };
 
 type SaveStatus = "empty" | "saving" | "saved" | "pending" | "error";
+type FinishState = "idle" | "saving_sets" | "finishing" | "retrying" | "saved" | "error";
 
 type ParsedSet = {
   setNumber: number;
@@ -78,6 +79,15 @@ const statusClass: Record<SaveStatus, string> = {
   error: "bg-red-100 text-red-700",
 };
 
+const finishCopy: Record<FinishState, string> = {
+  idle: "Finalizar entrenamiento",
+  saving_sets: "Guardando series...",
+  finishing: "Finalizando...",
+  retrying: "Reintentando confirmación...",
+  saved: "Entrenamiento guardado",
+  error: "Finalizar entrenamiento",
+};
+
 export function WorkoutSessionClient({
   sessionId,
   readOnly,
@@ -105,16 +115,18 @@ export function WorkoutSessionClient({
     Object.fromEntries(exercises.map((exercise) => [exercise.key, exercise.initialLogs.length]))
   );
   const [errorsByKey, setErrorsByKey] = useState<Record<string, string>>({});
-  const [isFinishing, setIsFinishing] = useState(false);
+  const [finishState, setFinishState] = useState<FinishState>("idle");
   const [confirmOmit, setConfirmOmit] = useState(false);
   const [finishError, setFinishError] = useState("");
   const [finishWarning, setFinishWarning] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
+  const isFinishing = finishState === "saving_sets" || finishState === "finishing" || finishState === "retrying";
   const savedSets = Object.values(savedCountByKey).reduce((sum, count) => sum + count, 0);
   const totalSets = exercises.reduce((sum, exercise) => sum + exercise.targetSets, 0);
 
   function updateDraft(key: string, setNumber: number, field: keyof Omit<DraftSet, "setNumber">, value: string) {
-    if (readOnly) {
+    if (readOnly || isFinishing || finishState === "saved") {
       return;
     }
 
@@ -130,6 +142,7 @@ export function WorkoutSessionClient({
       setErrorsByKey((errors) => ({ ...errors, [key]: "" }));
       setConfirmOmit(false);
       setFinishWarning("");
+      setSuccessMessage("");
       return { ...current, [key]: nextDrafts };
     });
   }
@@ -158,6 +171,15 @@ export function WorkoutSessionClient({
         throw new Error(message);
       }
 
+      await saveExerciseSets({
+        sessionId,
+        exerciseId: exercise.exerciseId,
+        sets: [],
+      });
+      const nextSignature = signature(drafts);
+      setSavedSignatures((current) => ({ ...current, [key]: nextSignature }));
+      setSavedCountByKey((counts) => ({ ...counts, [key]: 0 }));
+      setStatusByKey((statuses) => ({ ...statuses, [key]: "empty" }));
       return inspection;
     }
 
@@ -183,14 +205,15 @@ export function WorkoutSessionClient({
   }
 
   async function handleFinish() {
-    if (readOnly || isFinishing) {
+    if (readOnly || isFinishing || finishState === "saved") {
       return;
     }
 
     try {
-      setIsFinishing(true);
+      setFinishState("saving_sets");
       setFinishError("");
       setFinishWarning("");
+      setSuccessMessage("");
 
       let emptyCount = 0;
       let incompleteCount = 0;
@@ -212,22 +235,42 @@ export function WorkoutSessionClient({
 
       if ((emptyCount > 0 || incompleteCount > 0) && !confirmOmit) {
         setConfirmOmit(true);
+        setFinishState("idle");
         setFinishWarning(
-          `Hay ${emptyCount} series vacias y ${incompleteCount} incompletas. Puedes finalizar omitiendolas.`
+          `Hay ${emptyCount} series vacías y ${incompleteCount} incompletas. Puedes finalizar omitiéndolas.`
         );
         return;
       }
 
-      await completeWorkoutSession({
+      if (typeof navigator !== "undefined" && navigator.onLine === false) {
+        setFinishState("error");
+        setFinishError("Sin conexión. Tus datos permanecen en pantalla. Conéctate y vuelve a intentarlo.");
+        return;
+      }
+
+      setFinishState(finishError ? "retrying" : "finishing");
+      const result = await completeWorkoutSession({
         sessionId,
         allowIncomplete: emptyCount > 0 || incompleteCount > 0 || confirmOmit,
       });
-      router.push("/dashboard");
-      router.refresh();
+
+      if (result.status !== "completed" && result.status !== "already_completed") {
+        throw new Error("La sesión no se pudo completar porque ya no está activa.");
+      }
+
+      setFinishState("saved");
+      setSuccessMessage(`Entrenamiento guardado${result.next_day_name ? `. Siguiente: ${result.next_day_name}` : ""}`);
+      window.setTimeout(() => {
+        router.push("/dashboard");
+        router.refresh();
+      }, 2000);
     } catch (err) {
-      setFinishError(err instanceof Error ? err.message : "Error finalizando entrenamiento.");
-    } finally {
-      setIsFinishing(false);
+      setFinishState("error");
+      setFinishError(
+        err instanceof Error
+          ? err.message
+          : "No se pudo confirmar la finalización. Reintenta para comprobar el estado."
+      );
     }
   }
 
@@ -238,9 +281,15 @@ export function WorkoutSessionClient({
         <Stat label="Estado" value={readOnly ? "Cerrada" : "Activa"} />
       </div>
 
+      {successMessage ? (
+        <div role="status" className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800 shadow-sm">
+          {successMessage}
+        </div>
+      ) : null}
+
       {readOnly ? (
         <div className="rounded-2xl border bg-white p-4 text-sm text-slate-600 shadow-sm">
-          Esta sesion esta finalizada. Puedes revisar los datos, pero no editarla.
+          Esta sesión está finalizada. Puedes revisar los datos, pero no editarla.
         </div>
       ) : null}
 
@@ -267,7 +316,7 @@ export function WorkoutSessionClient({
                   ) : null}
                 </div>
                 <Link
-                  href={`/progress/${exercise.exerciseId}`}
+                  href={`/progress/exercise/${exercise.exerciseId}`}
                   className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold"
                 >
                   Progreso
@@ -293,19 +342,19 @@ export function WorkoutSessionClient({
                       <span className="text-sm font-semibold text-slate-600">S{draft.setNumber}</span>
                       <CompactInput
                         value={draft.weight}
-                        readOnly={readOnly}
+                        readOnly={readOnly || isFinishing || finishState === "saved"}
                         step="0.5"
                         onChange={(value) => updateDraft(exercise.key, draft.setNumber, "weight", value)}
                       />
                       <CompactInput
                         value={draft.reps}
-                        readOnly={readOnly}
+                        readOnly={readOnly || isFinishing || finishState === "saved"}
                         step="1"
                         onChange={(value) => updateDraft(exercise.key, draft.setNumber, "reps", value)}
                       />
                       <CompactInput
                         value={draft.rir}
-                        readOnly={readOnly}
+                        readOnly={readOnly || isFinishing || finishState === "saved"}
                         step="1"
                         onChange={(value) => updateDraft(exercise.key, draft.setNumber, "rir", value)}
                       />
@@ -322,7 +371,7 @@ export function WorkoutSessionClient({
                   <button
                     type="button"
                     onClick={() => void saveExercise(exercise.key, { allowIncomplete: false })}
-                    disabled={status === "saving"}
+                    disabled={status === "saving" || isFinishing || finishState === "saved"}
                     className="rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
                   >
                     Guardar ejercicio
@@ -347,14 +396,10 @@ export function WorkoutSessionClient({
           <button
             type="button"
             onClick={handleFinish}
-            disabled={isFinishing}
+            disabled={isFinishing || finishState === "saved"}
             className="w-full rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
           >
-            {isFinishing
-              ? "Finalizando..."
-              : confirmOmit
-                ? "Finalizar omitiendo series"
-                : "Finalizar entrenamiento"}
+            {confirmOmit && finishState === "idle" ? "Finalizar omitiendo series" : finishCopy[finishState]}
           </button>
         </div>
       ) : null}

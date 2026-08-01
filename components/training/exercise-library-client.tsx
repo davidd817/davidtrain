@@ -280,7 +280,7 @@ export function ExerciseLibraryClient({ exercises }: { exercises: Exercise[] }) 
                       <Link
                         title="Progreso"
                         aria-label="Progreso"
-                        href={`/progress/${exercise.id}`}
+                        href={`/progress/exercise/${exercise.id}`}
                         className="flex items-center justify-center rounded-xl border border-slate-200 px-3 py-2"
                       >
                         <BarChart3 className="h-4 w-4" />

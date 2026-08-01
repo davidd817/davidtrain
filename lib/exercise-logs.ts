@@ -41,7 +41,7 @@ async function assertEditableSessionExercise({
 
   const { data: session, error: sessionError } = await supabase
     .from("workout_sessions")
-    .select("id, day_id, completed_at")
+    .select("id, day_id, completed_at, status, cancelled_at")
     .eq("id", sessionId)
     .eq("user_id", userId)
     .maybeSingle();
@@ -54,8 +54,12 @@ async function assertEditableSessionExercise({
     throw new Error("Sesion no encontrada.");
   }
 
-  if (session.completed_at) {
+  if (session.completed_at || session.status === "completed") {
     throw new Error("No se puede editar una sesion finalizada.");
+  }
+
+  if (session.cancelled_at || session.status === "cancelled") {
+    throw new Error("No se puede editar una sesion cancelada.");
   }
 
   if (!session.day_id) {
@@ -167,10 +171,6 @@ export async function saveExerciseSets({
   exerciseId: string;
   sets: SaveExerciseSetInput[];
 }) {
-  if (sets.length === 0) {
-    return [];
-  }
-
   await assertEditableSessionExercise({ sessionId, exerciseId });
 
   for (const set of sets) {
@@ -178,6 +178,22 @@ export async function saveExerciseSets({
   }
 
   const supabase = await createClient();
+  const setNumbers = sets.map((set) => set.setNumber);
+
+  if (sets.length === 0) {
+    const { error } = await supabase
+      .from("exercise_logs")
+      .delete()
+      .eq("session_id", sessionId)
+      .eq("exercise_id", exerciseId);
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return [];
+  }
+
   const rows = sets.map((set) => ({
     session_id: sessionId,
     exercise_id: exerciseId,
@@ -196,6 +212,17 @@ export async function saveExerciseSets({
 
   if (error) {
     throw new Error(error.message);
+  }
+
+  const { error: staleError } = await supabase
+    .from("exercise_logs")
+    .delete()
+    .eq("session_id", sessionId)
+    .eq("exercise_id", exerciseId)
+    .not("set_number", "in", `(${setNumbers.join(",")})`);
+
+  if (staleError) {
+    throw new Error(staleError.message);
   }
 
   return (data ?? []) as ExerciseLog[];

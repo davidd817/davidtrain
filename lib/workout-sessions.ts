@@ -1,15 +1,31 @@
 "use server";
 
-import { secondsBetween } from "@/lib/format";
-import { getTrainingState } from "@/lib/training-state";
 import { createClient, getUserId } from "@/lib/supabase/server";
-import { getDaysByRoutine } from "@/lib/workout-days";
 import type { ExerciseLog, PlannedExercise, WorkoutSession } from "@/lib/types";
 
 type WorkoutSessionDetail = WorkoutSession & {
   workout_routines: { name: string } | null;
   workout_days: { name: string; order_index?: number } | null;
 };
+
+type CompleteWorkoutResult = {
+  status: "completed" | "already_completed" | "cancelled";
+  session_id: string;
+  completed_at: string | null;
+  previous_day_index: number | null;
+  next_day_index: number | null;
+  next_day_name: string | null;
+};
+
+type CancelWorkoutResult = {
+  status: "cancelled" | "already_cancelled" | "completed";
+  session_id: string;
+  cancelled_at: string | null;
+};
+
+function isCancelledSession(session: Pick<WorkoutSession, "status" | "cancelled_at">) {
+  return session.status === "cancelled" || Boolean(session.cancelled_at);
+}
 
 export async function getOpenWorkoutSession(): Promise<WorkoutSessionDetail | null> {
   const supabase = await createClient();
@@ -25,7 +41,9 @@ export async function getOpenWorkoutSession(): Promise<WorkoutSessionDetail | nu
     `
     )
     .eq("user_id", userId)
+    .eq("status", "in_progress")
     .is("completed_at", null)
+    .is("cancelled_at", null)
     .order("started_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -51,7 +69,9 @@ export async function getLatestCompletedSession(): Promise<WorkoutSessionDetail 
     `
     )
     .eq("user_id", userId)
+    .eq("status", "completed")
     .not("completed_at", "is", null)
+    .is("cancelled_at", null)
     .order("completed_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -99,12 +119,19 @@ export async function createWorkoutSession({
       user_id: userId,
       routine_id: routineId,
       day_id: dayId,
+      status: "in_progress",
     })
     .select()
     .single();
 
   if (error) {
-    throw new Error(error.message);
+    const existing = await getOpenWorkoutSession();
+
+    if (existing) {
+      return existing;
+    }
+
+    throw new Error("No se pudo iniciar el entrenamiento. Inténtalo de nuevo.");
   }
 
   return data as WorkoutSession;
@@ -139,7 +166,7 @@ export async function getWorkoutSessionById(
 export async function getPlannedExercisesForSession(
   session: WorkoutSession
 ): Promise<PlannedExercise[]> {
-  if (!session.day_id) {
+  if (!session.day_id || isCancelledSession(session)) {
     return [];
   }
 
@@ -156,7 +183,8 @@ export async function getPlannedExercisesForSession(
         name,
         primary_muscle,
         secondary_muscle,
-        notes
+        notes,
+        is_global
       ),
       workout_days!inner(workout_routines!inner(user_id))
     `
@@ -179,20 +207,26 @@ export async function completeWorkoutSession({
 }: {
   sessionId: string;
   allowIncomplete?: boolean;
-}) {
+}): Promise<CompleteWorkoutResult> {
   const supabase = await createClient();
-  const userId = await getUserId();
   const session = await getWorkoutSessionById(sessionId);
 
   if (!session) {
-    throw new Error("Sesion no encontrada.");
+    throw new Error("Sesión no encontrada.");
   }
 
-  if (session.completed_at) {
-    return;
+  if (isCancelledSession(session)) {
+    return {
+      status: "cancelled",
+      session_id: session.id,
+      completed_at: session.completed_at,
+      previous_day_index: session.completed_day_index ?? null,
+      next_day_index: session.resulting_next_day_index ?? null,
+      next_day_name: null,
+    };
   }
 
-  if (!allowIncomplete) {
+  if (!allowIncomplete && !session.completed_at) {
     const planned = await getPlannedExercisesForSession(session);
     const totalSets = planned.reduce((sum, item) => sum + (item.sets ?? 0), 0);
 
@@ -210,71 +244,47 @@ export async function completeWorkoutSession({
     }
   }
 
-  const completedAt = new Date().toISOString();
-  const { error: updateSessionError } = await supabase
-    .from("workout_sessions")
-    .update({
-      completed_at: completedAt,
-      duration_seconds: secondsBetween(session.started_at, completedAt),
-    })
-    .eq("id", sessionId)
-    .eq("user_id", userId)
-    .is("completed_at", null);
+  const { data, error } = await supabase.rpc("complete_workout_session_atomic", {
+    p_session_id: sessionId,
+  });
 
-  if (updateSessionError) {
-    throw new Error(updateSessionError.message);
+  if (error) {
+    throw new Error(error.message);
   }
 
-  await advanceTrainingDayOnce(session);
+  const result = Array.isArray(data) ? data[0] : data;
+
+  if (!result) {
+    throw new Error("No se pudo confirmar la finalización.");
+  }
+
+  return result as CompleteWorkoutResult;
 }
 
-async function advanceTrainingDayOnce(session: WorkoutSessionDetail) {
-  if (session.completed_day_advanced_at) {
-    return;
-  }
-
+export async function cancelWorkoutSession({
+  sessionId,
+  reason,
+}: {
+  sessionId: string;
+  reason?: string;
+}): Promise<CancelWorkoutResult> {
   const supabase = await createClient();
-  const userId = await getUserId();
-  const state = await getTrainingState();
+  const { data, error } = await supabase.rpc("cancel_workout_session_atomic", {
+    p_session_id: sessionId,
+    p_reason: reason ?? null,
+  });
 
-  if (!state?.active_routine_id || state.active_routine_id !== session.routine_id) {
-    return;
+  if (error) {
+    throw new Error(error.message);
   }
 
-  const days = await getDaysByRoutine(state.active_routine_id);
+  const result = Array.isArray(data) ? data[0] : data;
 
-  if (days.length === 0) {
-    return;
+  if (!result) {
+    throw new Error("No se pudo cancelar el entrenamiento.");
   }
 
-  const currentIndex = days.findIndex((day) => day.id === session.day_id);
-  const nextIndex =
-    currentIndex === -1 ? state.next_day_index : (currentIndex + 1) % days.length;
-  const now = new Date().toISOString();
-
-  const [{ error: stateError }, { error: sessionError }] = await Promise.all([
-    supabase
-      .from("user_training_state")
-      .update({
-        next_day_index: nextIndex,
-        updated_at: now,
-      })
-      .eq("user_id", userId),
-    supabase
-      .from("workout_sessions")
-      .update({ completed_day_advanced_at: now })
-      .eq("id", session.id)
-      .eq("user_id", userId)
-      .is("completed_day_advanced_at", null),
-  ]);
-
-  if (stateError) {
-    throw new Error(stateError.message);
-  }
-
-  if (sessionError) {
-    throw new Error(sessionError.message);
-  }
+  return result as CancelWorkoutResult;
 }
 
 type PreviousExercisePerformance = {
@@ -316,6 +326,8 @@ export async function getPreviousExercisePerformances({
         day_id,
         started_at,
         completed_at,
+        status,
+        cancelled_at,
         workout_routines ( name ),
         workout_days ( name )
       )
@@ -326,6 +338,8 @@ export async function getPreviousExercisePerformances({
     .lt("workout_sessions.started_at", beforeStartedAt)
     .eq("workout_sessions.user_id", userId)
     .eq("workout_sessions.day_id", currentDayId)
+    .eq("workout_sessions.status", "completed")
+    .is("workout_sessions.cancelled_at", null)
     .not("workout_sessions.completed_at", "is", null)
     .order("created_at", { ascending: false });
 
@@ -340,6 +354,8 @@ export async function getPreviousExercisePerformances({
         day_id: string | null;
         started_at: string;
         completed_at: string | null;
+        status: string | null;
+        cancelled_at: string | null;
         workout_routines: { name: string } | null;
         workout_days: { name: string } | null;
       };
@@ -380,15 +396,7 @@ export async function getPreviousExercisePerformances({
 
     group.sets.push(row);
     group.bestSet = group.sets.reduce<ExerciseLog | null>((best, set) => {
-      if (!best) {
-        return set;
-      }
-
-      if (set.weight > best.weight) {
-        return set;
-      }
-
-      if (set.weight === best.weight && set.reps > best.reps) {
+      if (!best || set.weight > best.weight || (set.weight === best.weight && set.reps > best.reps)) {
         return set;
       }
 

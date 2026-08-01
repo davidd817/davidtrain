@@ -8,6 +8,7 @@ import {
   Play,
 } from "lucide-react";
 
+import { CancelWorkoutButton } from "@/components/dashboard/cancel-workout-button";
 import { SkipTrainingDayButton } from "@/components/dashboard/skip-training-day-button";
 import { StartWorkoutButton } from "@/components/dashboard/start-workout-button";
 import { AppShell } from "@/components/layout/app-shell";
@@ -86,6 +87,7 @@ export default async function DashboardPage() {
               Continuar entrenamiento
               <ArrowRight className="h-4 w-4" />
             </Link>
+            <CancelWorkoutButton sessionId={openSession.id} />
           </section>
         ) : (
           <section className="rounded-2xl border bg-white p-4 shadow-sm">

@@ -97,7 +97,9 @@ export async function skipCurrentTrainingDay(reason?: string) {
     .from("workout_sessions")
     .select("id")
     .eq("user_id", userId)
+    .eq("status", "in_progress")
     .is("completed_at", null)
+    .is("cancelled_at", null)
     .limit(1)
     .maybeSingle();
 

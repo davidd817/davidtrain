@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { WorkoutSessionClient } from "@/components/workout/workout-session-client";
@@ -24,6 +24,14 @@ export default async function WorkoutSessionPage({ params }: Props) {
 
   if (!session) {
     notFound();
+  }
+
+  if (session.status === "cancelled" || session.cancelled_at) {
+    redirect("/dashboard");
+  }
+
+  if (session.completed_at || session.status === "completed") {
+    redirect(`/history/${session.id}`);
   }
 
   const [dayExercises, logs] = await Promise.all([

@@ -11,6 +11,8 @@ type WorkoutSessionHistoryItem = {
   routine_id: string | null;
   day_id: string | null;
   duration_seconds: number | null;
+  status: string | null;
+  cancelled_at: string | null;
   workout_routines: { name: string } | null;
   workout_days: { name: string } | null;
   exercise_count: number;
@@ -56,19 +58,23 @@ export async function getWorkoutHistory({
       routine_id,
       day_id,
       duration_seconds,
+      status,
+      cancelled_at,
       workout_routines ( name ),
       workout_days ( name )
     `
     )
     .eq("user_id", userId)
+    .neq("status", "cancelled")
+    .is("cancelled_at", null)
     .order("started_at", { ascending: false });
 
   if (status === "completed") {
-    query = query.not("completed_at", "is", null);
+    query = query.eq("status", "completed").not("completed_at", "is", null);
   }
 
   if (status === "open") {
-    query = query.is("completed_at", null);
+    query = query.eq("status", "in_progress").is("completed_at", null);
   }
 
   const { data, error } = await query;
