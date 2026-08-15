@@ -60,6 +60,8 @@ export async function getExercisesByDay(dayId: string): Promise<DayExercise[]> {
         primary_muscle,
         secondary_muscle,
         notes,
+        youtube_url,
+        video_title,
         is_global
       ),
       workout_days!inner (

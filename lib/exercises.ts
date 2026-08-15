@@ -2,6 +2,7 @@
 
 import { createClient, getUserId } from "@/lib/supabase/server";
 import type { Exercise } from "@/lib/types";
+import { cleanOptionalYouTubeUrl } from "@/lib/youtube";
 
 type CreateExerciseInput = {
   name: string;
@@ -115,6 +116,7 @@ export async function getExerciseById(exerciseId: string): Promise<Exercise | nu
 export async function createExercise(input: CreateExerciseInput) {
   const supabase = await createClient();
   const userId = await getUserId();
+  const youtubeUrl = cleanOptionalYouTubeUrl(input.youtube_url);
 
   const { data, error } = await supabase
     .from("exercises")
@@ -125,7 +127,9 @@ export async function createExercise(input: CreateExerciseInput) {
       secondary_muscle: input.secondary_muscle || null,
       description: input.description || null,
       notes: input.notes || null,
-      youtube_url: input.youtube_url || null,
+      youtube_url: youtubeUrl,
+      video_title: null,
+      video_verified_at: null,
       is_favorite: false,
       is_global: false,
       source_exercise_id: null,
@@ -150,6 +154,25 @@ export async function createExercise(input: CreateExerciseInput) {
 export async function updateExercise(input: UpdateExerciseInput) {
   const supabase = await createClient();
   const userId = await getUserId();
+  const youtubeUrl = cleanOptionalYouTubeUrl(input.youtube_url);
+
+  const { data: current, error: currentError } = await supabase
+    .from("exercises")
+    .select("id, youtube_url, video_title, video_verified_at")
+    .eq("id", input.id)
+    .eq("user_id", userId)
+    .eq("is_global", false)
+    .maybeSingle();
+
+  if (currentError) {
+    throw new Error(currentError.message);
+  }
+
+  if (!current) {
+    throw new Error("Solo puedes editar ejercicios personales.");
+  }
+
+  const videoChanged = (current.youtube_url ?? null) !== youtubeUrl;
 
   const { data, error } = await supabase
     .from("exercises")
@@ -159,7 +182,9 @@ export async function updateExercise(input: UpdateExerciseInput) {
       secondary_muscle: input.secondary_muscle || null,
       description: input.description || null,
       notes: input.notes || null,
-      youtube_url: input.youtube_url || null,
+      youtube_url: youtubeUrl,
+      video_title: videoChanged ? null : current.video_title,
+      video_verified_at: videoChanged ? null : current.video_verified_at,
     })
     .eq("id", input.id)
     .eq("user_id", userId)
@@ -248,6 +273,8 @@ export async function personalizeGlobalExercise(exerciseId: string) {
       description: exercise.description,
       notes: exercise.notes,
       youtube_url: exercise.youtube_url,
+      video_title: exercise.video_title ?? null,
+      video_verified_at: exercise.video_verified_at ?? null,
       is_favorite: false,
       is_global: false,
       source_exercise_id: exercise.id,

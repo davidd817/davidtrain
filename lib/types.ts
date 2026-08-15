@@ -8,6 +8,8 @@ export type Exercise = {
   description: string | null;
   notes: string | null;
   youtube_url: string | null;
+  video_title?: string | null;
+  video_verified_at?: string | null;
   is_favorite: boolean;
   archived_at?: string | null;
   is_global?: boolean;
@@ -45,7 +47,14 @@ export type PlannedExercise = {
   archived_at?: string | null;
   exercises: Pick<
     Exercise,
-    "id" | "name" | "primary_muscle" | "secondary_muscle" | "notes" | "is_global"
+    | "id"
+    | "name"
+    | "primary_muscle"
+    | "secondary_muscle"
+    | "notes"
+    | "youtube_url"
+    | "video_title"
+    | "is_global"
   > | null;
 };
 

@@ -1,9 +1,11 @@
 "use client";
 
+import type { FormEvent } from "react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Archive, ArrowDown, ArrowUp, Copy, PenLine } from "lucide-react";
 
+import { ActionTile } from "@/components/ui/action-tile";
 import {
   archiveExerciseInDay,
   duplicateExerciseInDay,
@@ -51,7 +53,7 @@ export function PlannedExerciseActions({
     }
   }
 
-  async function handleUpdate(event: React.FormEvent<HTMLFormElement>) {
+  async function handleUpdate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const parsed = [
       parseBoundedNumber({ value: sets, label: "Series", min: 1, max: 20, integer: true }),
@@ -111,41 +113,35 @@ export function PlannedExerciseActions({
       {error ? <p className="text-xs text-red-600">{error}</p> : null}
 
       <div className="grid grid-cols-5 gap-2">
-        <Button label="Editar" disabled={Boolean(busy)} onClick={() => setIsEditing(true)}>
-          <PenLine className="h-4 w-4" />
-        </Button>
-        <Button
+        <ActionTile label="Editar" icon={<PenLine />} disabled={Boolean(busy)} onClick={() => setIsEditing(true)} />
+        <ActionTile
           label="Subir"
+          icon={<ArrowUp />}
           disabled={Boolean(busy)}
           onClick={() => run("up", async () => moveExerciseInDay({ dayId, itemId: item.id, direction: "up" }))}
-        >
-          <ArrowUp className="h-4 w-4" />
-        </Button>
-        <Button
+        />
+        <ActionTile
           label="Bajar"
+          icon={<ArrowDown />}
           disabled={Boolean(busy)}
           onClick={() => run("down", async () => moveExerciseInDay({ dayId, itemId: item.id, direction: "down" }))}
-        >
-          <ArrowDown className="h-4 w-4" />
-        </Button>
-        <Button
+        />
+        <ActionTile
           label="Duplicar"
+          icon={<Copy />}
           disabled={Boolean(busy)}
           onClick={() => run("copy", async () => void (await duplicateExerciseInDay(item.id)))}
-        >
-          <Copy className="h-4 w-4" />
-        </Button>
-        <Button
+        />
+        <ActionTile
           label="Archivar"
+          icon={<Archive />}
           disabled={Boolean(busy)}
           onClick={() => {
             if (window.confirm("Quitar este ejercicio del dia? El historial no cambia.")) {
               void run("archive", async () => archiveExerciseInDay(item.id));
             }
           }}
-        >
-          <Archive className="h-4 w-4" />
-        </Button>
+        />
       </div>
     </div>
   );
@@ -170,30 +166,5 @@ function Field({
         className="mt-1 w-full rounded-lg border px-2 py-2 text-sm text-slate-900"
       />
     </label>
-  );
-}
-
-function Button({
-  label,
-  children,
-  disabled,
-  onClick,
-}: {
-  label: string;
-  children: React.ReactNode;
-  disabled?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      title={label}
-      aria-label={label}
-      disabled={disabled}
-      onClick={onClick}
-      className="flex items-center justify-center rounded-xl border border-slate-200 px-3 py-2 text-slate-800 disabled:opacity-50"
-    >
-      {children}
-    </button>
   );
 }

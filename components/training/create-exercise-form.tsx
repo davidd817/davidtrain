@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 
 import { createExercise } from "@/lib/exercises";
 import { MUSCLE_GROUPS } from "@/lib/muscles";
+import { isValidYouTubeUrl } from "@/lib/youtube";
 
 export function CreateExerciseForm() {
   const router = useRouter();
@@ -29,8 +30,8 @@ export function CreateExerciseForm() {
       return;
     }
 
-    if (youtubeUrl.trim() && !youtubeUrl.trim().startsWith("http")) {
-      setErrorMessage("El enlace de video debe empezar por http.");
+    if (!isValidYouTubeUrl(youtubeUrl)) {
+      setErrorMessage("Introduce una URL válida de YouTube.");
       return;
     }
 
@@ -124,11 +125,11 @@ export function CreateExerciseForm() {
       </div>
 
       <div>
-        <label className="mb-1 block text-sm font-medium">Video URL</label>
+        <label className="mb-1 block text-sm font-medium">Vídeo de técnica (YouTube)</label>
         <input
           value={youtubeUrl}
           onChange={(event) => setYoutubeUrl(event.target.value)}
-          placeholder="https://youtube.com/..."
+          placeholder="https://youtube.com/watch?v=..."
           className="w-full rounded-xl border px-3 py-2 outline-none"
         />
       </div>

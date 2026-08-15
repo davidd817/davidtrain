@@ -1,19 +1,19 @@
 "use client";
 
-import Link from "next/link";
-import type { FormEvent, ReactNode } from "react";
+import type { FormEvent } from "react";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Archive,
   BarChart3,
   CopyPlus,
-  ExternalLink,
   PenLine,
+  PlayCircle,
   Star,
   Trash2,
 } from "lucide-react";
 
+import { ActionTile } from "@/components/ui/action-tile";
 import {
   archiveExercise,
   deleteExerciseIfUnused,
@@ -22,6 +22,7 @@ import {
   updateExercise,
 } from "@/lib/exercises";
 import type { Exercise } from "@/lib/types";
+import { isValidYouTubeUrl } from "@/lib/youtube";
 
 type LibraryTab = "all" | "base" | "mine" | "favorites";
 
@@ -258,79 +259,61 @@ export function ExerciseLibraryClient({ exercises }: { exercises: Exercise[] }) 
                       </p>
                     ) : null}
 
-                    <div className="mt-3 grid grid-cols-5 gap-2">
+                    <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5">
                       {isGlobal ? (
-                        <IconButton
+                        <ActionTile
                           label="Personalizar"
+                          icon={<CopyPlus />}
                           onClick={() =>
                             run(
                               async () => void (await personalizeGlobalExercise(exercise.id)),
                               "Copia personal creada."
                             )
                           }
-                        >
-                          <CopyPlus className="h-4 w-4" />
-                        </IconButton>
+                        />
                       ) : (
-                        <IconButton label="Editar" onClick={() => setEditingId(exercise.id)}>
-                          <PenLine className="h-4 w-4" />
-                        </IconButton>
+                        <ActionTile label="Editar" icon={<PenLine />} onClick={() => setEditingId(exercise.id)} />
                       )}
 
-                      <Link
-                        title="Progreso"
-                        aria-label="Progreso"
+                      <ActionTile
+                        label="Progreso"
+                        icon={<BarChart3 />}
                         href={`/progress/exercise/${exercise.id}`}
-                        className="flex items-center justify-center rounded-xl border border-slate-200 px-3 py-2"
-                      >
-                        <BarChart3 className="h-4 w-4" />
-                      </Link>
+                      />
 
                       {exercise.youtube_url ? (
-                        <a
-                          title="Video"
-                          aria-label="Video"
+                        <ActionTile
+                          label="Técnica"
+                          icon={<PlayCircle />}
                           href={exercise.youtube_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="flex items-center justify-center rounded-xl border border-slate-200 px-3 py-2"
-                        >
-                          <ExternalLink className="h-4 w-4" />
-                        </a>
-                      ) : (
-                        <span className="rounded-xl border border-slate-100 px-3 py-2" />
-                      )}
+                          external
+                        />
+                      ) : null}
 
                       {!isGlobal ? (
-                        <IconButton
+                        <ActionTile
                           label="Archivar"
+                          icon={<Archive />}
                           onClick={() => {
                             if (window.confirm("Archivar este ejercicio personal?")) {
                               void run(async () => archiveExercise(exercise.id), "Ejercicio archivado.");
                             }
                           }}
-                        >
-                          <Archive className="h-4 w-4" />
-                        </IconButton>
-                      ) : (
-                        <span className="rounded-xl border border-slate-100 px-3 py-2" />
-                      )}
+                        />
+                      ) : null}
 
                       {!isGlobal ? (
-                        <IconButton
+                        <ActionTile
                           label="Eliminar"
+                          icon={<Trash2 />}
                           danger
                           onClick={() => {
                             if (window.confirm("Eliminar solo si no se usa en rutinas ni historial?")) {
                               void run(async () => deleteExerciseIfUnused(exercise.id), "Ejercicio eliminado.");
                             }
                           }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </IconButton>
-                      ) : (
-                        <span className="rounded-xl border border-slate-100 px-3 py-2" />
-                      )}
+                        />
+                      ) : null}
                     </div>
                   </>
                 )}
@@ -367,9 +350,17 @@ function ExerciseEditForm({
   const [description, setDescription] = useState(exercise.description ?? "");
   const [notes, setNotes] = useState(exercise.notes ?? "");
   const [youtubeUrl, setYoutubeUrl] = useState(exercise.youtube_url ?? "");
+  const [error, setError] = useState("");
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (!isValidYouTubeUrl(youtubeUrl)) {
+      setError("Introduce una URL válida de YouTube.");
+      return;
+    }
+
+    setError("");
     await onSave({
       id: exercise.id,
       name: name.trim(),
@@ -391,7 +382,13 @@ function ExerciseEditForm({
       </div>
       <textarea value={description} onChange={(event) => setDescription(event.target.value)} className="min-h-16 w-full rounded-lg border px-3 py-2 text-sm" />
       <textarea value={notes} onChange={(event) => setNotes(event.target.value)} className="min-h-16 w-full rounded-lg border px-3 py-2 text-sm" />
-      <input value={youtubeUrl} onChange={(event) => setYoutubeUrl(event.target.value)} className="w-full rounded-lg border px-3 py-2 text-sm" />
+      <input
+        value={youtubeUrl}
+        onChange={(event) => setYoutubeUrl(event.target.value)}
+        placeholder="Vídeo de técnica (YouTube)"
+        className="w-full rounded-lg border px-3 py-2 text-sm"
+      />
+      {error ? <p className="text-sm text-red-600">{error}</p> : null}
       <div className="grid grid-cols-2 gap-2">
         <button className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white">
           Guardar
@@ -401,31 +398,5 @@ function ExerciseEditForm({
         </button>
       </div>
     </form>
-  );
-}
-
-function IconButton({
-  label,
-  children,
-  danger,
-  onClick,
-}: {
-  label: string;
-  children: ReactNode;
-  danger?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      title={label}
-      aria-label={label}
-      onClick={onClick}
-      className={`flex items-center justify-center rounded-xl border px-3 py-2 ${
-        danger ? "border-red-200 text-red-700" : "border-slate-200 text-slate-800"
-      }`}
-    >
-      {children}
-    </button>
   );
 }

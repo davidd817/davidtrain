@@ -184,6 +184,8 @@ export async function getPlannedExercisesForSession(
         primary_muscle,
         secondary_muscle,
         notes,
+        youtube_url,
+        video_title,
         is_global
       ),
       workout_days!inner(workout_routines!inner(user_id))

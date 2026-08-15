@@ -60,6 +60,8 @@ export default async function WorkoutSessionPage({ params }: Props) {
       targetRir: item.rir,
       restSeconds: item.rest_seconds,
       notes: item.notes,
+      youtubeUrl: item.exercises?.youtube_url ?? null,
+      videoTitle: item.exercises?.video_title ?? null,
       initialLogs: logs
         .filter((log) => log.exercise_id === item.exercise_id)
         .map((log) => ({

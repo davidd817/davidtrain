@@ -1,9 +1,11 @@
 "use client";
 
+import type { FormEvent } from "react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Archive, Copy, PenLine, Trash2 } from "lucide-react";
 
+import { ActionTile } from "@/components/ui/action-tile";
 import {
   archiveRoutine,
   deleteRoutineIfSafe,
@@ -40,7 +42,7 @@ export function RoutineActions({
     }
   }
 
-  async function handleUpdate(event: React.FormEvent<HTMLFormElement>) {
+  async function handleUpdate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const cleanName = name.trim();
 
@@ -91,29 +93,26 @@ export function RoutineActions({
       {error ? <p className="text-xs text-red-600">{error}</p> : null}
 
       <div className="grid grid-cols-4 gap-2">
-        <IconButton label="Editar" disabled={Boolean(busy)} onClick={() => setIsEditing(true)}>
-          <PenLine className="h-4 w-4" />
-        </IconButton>
-        <IconButton
+        <ActionTile label="Editar" icon={<PenLine />} disabled={Boolean(busy)} onClick={() => setIsEditing(true)} />
+        <ActionTile
           label="Duplicar"
+          icon={<Copy />}
           disabled={Boolean(busy)}
           onClick={() => run("copy", async () => void (await duplicateRoutine(routineId)))}
-        >
-          <Copy className="h-4 w-4" />
-        </IconButton>
-        <IconButton
+        />
+        <ActionTile
           label="Archivar"
+          icon={<Archive />}
           disabled={Boolean(busy)}
           onClick={() => {
             if (window.confirm("Archivar esta rutina? No se borrara el historial.")) {
               void run("archive", async () => archiveRoutine(routineId));
             }
           }}
-        >
-          <Archive className="h-4 w-4" />
-        </IconButton>
-        <IconButton
+        />
+        <ActionTile
           label="Eliminar"
+          icon={<Trash2 />}
           disabled={Boolean(busy)}
           danger
           onClick={() => {
@@ -121,39 +120,8 @@ export function RoutineActions({
               void run("delete", async () => deleteRoutineIfSafe(routineId));
             }
           }}
-        >
-          <Trash2 className="h-4 w-4" />
-        </IconButton>
+        />
       </div>
     </div>
-  );
-}
-
-function IconButton({
-  label,
-  children,
-  disabled,
-  danger,
-  onClick,
-}: {
-  label: string;
-  children: React.ReactNode;
-  disabled?: boolean;
-  danger?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      title={label}
-      aria-label={label}
-      disabled={disabled}
-      onClick={onClick}
-      className={`flex items-center justify-center rounded-xl border px-3 py-2 text-sm font-semibold disabled:opacity-50 ${
-        danger ? "border-red-200 text-red-700" : "border-slate-200 text-slate-800"
-      }`}
-    >
-      {children}
-    </button>
   );
 }

@@ -1,9 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { BarChart3, PlayCircle } from "lucide-react";
 
+import { ActionTile } from "@/components/ui/action-tile";
 import { saveExerciseSets } from "@/lib/exercise-logs";
 import { formatDateTime } from "@/lib/format";
 import { getFirstNumberError, parseBoundedNumber } from "@/lib/validation";
@@ -35,6 +36,8 @@ type WorkoutExercise = {
   targetRir: number | null;
   restSeconds: number | null;
   notes: string | null;
+  youtubeUrl: string | null;
+  videoTitle: string | null;
   initialLogs: LogValue[];
   previous: PreviousPerformance | null;
 };
@@ -315,12 +318,22 @@ export function WorkoutSessionClient({
                     <p className="mt-1 text-xs text-slate-500">Descanso objetivo: {exercise.restSeconds}s</p>
                   ) : null}
                 </div>
-                <Link
-                  href={`/progress/exercise/${exercise.exerciseId}`}
-                  className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold"
-                >
-                  Progreso
-                </Link>
+                <div className="grid min-w-[116px] grid-cols-2 gap-2">
+                  <ActionTile
+                    label="Progreso"
+                    icon={<BarChart3 />}
+                    href={`/progress/exercise/${exercise.exerciseId}`}
+                    className={exercise.youtubeUrl ? "" : "col-span-2"}
+                  />
+                  {exercise.youtubeUrl ? (
+                    <ActionTile
+                      label="Técnica"
+                      icon={<PlayCircle />}
+                      href={exercise.youtubeUrl}
+                      external
+                    />
+                  ) : null}
+                </div>
               </div>
 
               {exercise.notes ? (

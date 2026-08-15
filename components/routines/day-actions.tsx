@@ -1,9 +1,11 @@
 "use client";
 
+import type { FormEvent } from "react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Archive, ArrowDown, ArrowUp, Copy, PenLine } from "lucide-react";
 
+import { ActionTile } from "@/components/ui/action-tile";
 import {
   archiveWorkoutDay,
   duplicateWorkoutDay,
@@ -39,7 +41,7 @@ export function DayActions({
     }
   }
 
-  async function handleUpdate(event: React.FormEvent<HTMLFormElement>) {
+  async function handleUpdate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const cleanName = name.trim();
 
@@ -72,67 +74,36 @@ export function DayActions({
       {error ? <p className="text-xs text-red-600">{error}</p> : null}
 
       <div className="grid grid-cols-5 gap-2">
-        <SmallButton label="Editar" disabled={Boolean(busy)} onClick={() => setIsEditing(true)}>
-          <PenLine className="h-4 w-4" />
-        </SmallButton>
-        <SmallButton
+        <ActionTile label="Editar" icon={<PenLine />} disabled={Boolean(busy)} onClick={() => setIsEditing(true)} />
+        <ActionTile
           label="Subir"
+          icon={<ArrowUp />}
           disabled={Boolean(busy)}
           onClick={() => run("up", async () => moveWorkoutDay({ routineId, dayId, direction: "up" }))}
-        >
-          <ArrowUp className="h-4 w-4" />
-        </SmallButton>
-        <SmallButton
+        />
+        <ActionTile
           label="Bajar"
+          icon={<ArrowDown />}
           disabled={Boolean(busy)}
           onClick={() => run("down", async () => moveWorkoutDay({ routineId, dayId, direction: "down" }))}
-        >
-          <ArrowDown className="h-4 w-4" />
-        </SmallButton>
-        <SmallButton
+        />
+        <ActionTile
           label="Duplicar"
+          icon={<Copy />}
           disabled={Boolean(busy)}
           onClick={() => run("copy", async () => void (await duplicateWorkoutDay(dayId)))}
-        >
-          <Copy className="h-4 w-4" />
-        </SmallButton>
-        <SmallButton
+        />
+        <ActionTile
           label="Archivar"
+          icon={<Archive />}
           disabled={Boolean(busy)}
           onClick={() => {
             if (window.confirm("Archivar este dia? El historial se conserva.")) {
               void run("archive", async () => archiveWorkoutDay(dayId));
             }
           }}
-        >
-          <Archive className="h-4 w-4" />
-        </SmallButton>
+        />
       </div>
     </div>
-  );
-}
-
-function SmallButton({
-  label,
-  children,
-  disabled,
-  onClick,
-}: {
-  label: string;
-  children: React.ReactNode;
-  disabled?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      title={label}
-      aria-label={label}
-      disabled={disabled}
-      onClick={onClick}
-      className="flex items-center justify-center rounded-xl border border-slate-200 px-3 py-2 text-slate-800 disabled:opacity-50"
-    >
-      {children}
-    </button>
   );
 }
