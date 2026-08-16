@@ -1,28 +1,31 @@
-# Training Module Notes
+# Módulo de entrenamiento
 
-## Current Auth Model
+## Modelo de autenticación
 
-The app uses Supabase Auth sessions via cookies. Application code should not use fixed user IDs.
+La aplicación usa Supabase Auth con cookies gestionadas por `@supabase/ssr`. Las consultas servidor obtienen el usuario mediante `supabase.auth.getUser()` y las Server Actions no deben aceptar un `user_id` arbitrario desde el cliente.
 
-## Pending Manual SQL
+El código actual no usa `DEV_USER_ID`. Si se encuentra una referencia antigua en una tarea o documento, debe tratarse como deuda histórica y no reintroducirse sin un plan explícito.
 
-Run `supabase/migrations/20260711143000_training_module_completion.sql` and the auth/RLS migration in Supabase before using the multiuser production app.
+## Modelo conceptual
 
-## RLS
+- `profiles`: perfil asociado a `auth.users`.
+- `exercises`: ejercicios personales y biblioteca global.
+- `user_exercise_favorites`: favoritos por usuario para ejercicios visibles.
+- `workout_routines` → `workout_days` → `exercises_in_day`: planificación jerárquica.
+- `user_training_state`: rutina activa y próximo índice de día.
+- `workout_sessions` → `exercise_logs`: sesiones y series registradas.
+- `workout_day_skips`: días omitidos, con usuario, rutina, día, fecha y motivo.
 
-The multiuser migration enables RLS on:
+Las relaciones hijo deben comprobar la propiedad de la rutina, día o sesión. La fuente de autorización es Supabase Auth/RLS y las comprobaciones de propietario que realizan las Server Actions.
 
-- `profiles`
-- `exercises`
-- `workout_routines`
-- `workout_days`
-- `exercises_in_day`
-- `user_training_state`
-- `workout_sessions`
-- `exercise_logs`
+## RLS y migraciones
 
-Tables with `user_id` use `auth.uid() = user_id`. Child tables use policies that check ownership through their parent routine, day, or session.
+La migración `20260711170000_auth_rls_multiuser.sql` habilita RLS sobre las tablas principales. Las siguientes migraciones amplían las políticas para biblioteca global, favoritos, saltos y sesiones fiables. Aplícalas manualmente en orden; no ejecutes SQL remoto desde una tarea de mantenimiento del código.
 
-## Exercise Import Script
+## Flujo de sesión
 
-`scripts/import-exercises.js` is now a manual admin utility. It requires `IMPORT_USER_ID` and should not be used for regular multiuser onboarding. New users start with an empty personal library.
+Una sesión en progreso se crea para el día elegido, las series se guardan con clave lógica de sesión/ejercicio/serie y la finalización usa una función RPC atómica. Las sesiones canceladas se excluyen del historial y del progreso. El dashboard ofrece continuar una sesión abierta y el entrenamiento muestra el rendimiento anterior del mismo día.
+
+## Importación de ejercicios
+
+`scripts/import-exercises.js` es una utilidad administrativa manual. Lee `scripts/exercise-library.txt`, requiere `IMPORT_USER_ID` y usa únicamente la clave publicable de Supabase. No forma parte del onboarding y no debe ejecutarse contra producción sin revisar usuario, datos y permisos.
