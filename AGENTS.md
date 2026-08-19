@@ -1,99 +1,92 @@
-# Personal Trainer App — Instrucciones para Codex
+# Instrucciones para agentes de DavidTrain
 
-## Objetivo
-Completar y profesionalizar únicamente el módulo de entrenamiento de la aplicación existente.
+## Objetivo del producto
 
-No implementar nutrición.
+DavidTrain es una aplicación personal para planificar, ejecutar y revisar entrenamientos. El alcance de este repositorio es el módulo de entrenamiento. No implementar nutrición ni ampliar el producto fuera de este alcance sin una instrucción explícita.
 
-## Stack existente
-- Next.js 16
-- App Router
-- TypeScript
-- Tailwind CSS
-- shadcn/ui parcialmente instalado
-- Supabase
-- Desarrollo con Webpack
+El flujo existente incluye biblioteca de ejercicios, rutinas, días secuenciales, ejercicios planificados, rutina activa, Auth de Supabase, sesiones, series, historial y progreso.
 
-## Regla principal
-No rehacer el proyecto desde cero.
+## Stack y estructura
 
-Primero leer y comprender todo el código actual.
+- Next.js 16, App Router, React 19 y TypeScript estricto.
+- Tailwind CSS 4, shadcn/ui parcialmente instalado, componentes UI locales y `lucide-react`.
+- Supabase Auth, `@supabase/ssr` y PostgreSQL con RLS.
+- Desarrollo con Webpack: conservar `"dev": "next dev --webpack"`.
+- Rutas y composición: `app/`.
+- UI reutilizable y componentes cliente: `components/`.
+- Server Actions, consultas y lógica pura: `lib/`.
+- Clientes SSR de Supabase: `lib/supabase/`.
+- Migraciones SQL versionadas: `supabase/migrations/`.
+- Utilidades administrativas manuales: `scripts/`.
+- Documentación: `README.md`, `docs/`, `CONTRIBUTING.md`.
 
-Evolucionar la aplicación existente de forma incremental.
+Usar imports con alias `@/`. Mantener la arquitectura existente y preferir cambios pequeños, locales y reversibles.
+Antes de modificar, leer y comprender el código actual; no rehacer el proyecto desde cero.
 
-## Estructura
-- Rutas: app/
-- Componentes: components/
-- Lógica y acceso a datos: lib/
-- Scripts: scripts/
+## Modelo de datos conocido
 
-Mantener imports con alias @/.
+No renombrar ni eliminar estas tablas: `profiles`, `exercises`, `workout_routines`, `workout_days`, `exercises_in_day`, `user_training_state`, `workout_sessions` y `exercise_logs`.
 
-## Tablas de Supabase existentes
-- profiles
-- exercises
-- workout_routines
-- workout_days
-- exercises_in_day
-- user_training_state
-- workout_sessions
-- exercise_logs
+Las migraciones actuales también usan `user_exercise_favorites` y `workout_day_skips`. Antes de modificar consultas, inspeccionar el esquema y las migraciones correspondientes.
 
-No renombrar estas tablas.
+## Supabase, Auth y seguridad
 
-No borrar tablas ni datos existentes.
+- Obtener el usuario desde `supabase.auth.getUser()` en servidor; no confiar en un `user_id` enviado por el cliente.
+- No reintroducir `DEV_USER_ID`. Si aparece en documentación antigua, tratarlo como deuda histórica.
+- Algunas tablas pueden tener RLS desactivado durante desarrollo; no asumir que ese estado es seguro para producción.
+- No migrar a autenticación real de golpe. Los cambios de Auth requieren un plan explícito y revisión humana.
+- No añadir claves `service_role`, secretos ni tokens al cliente, al repositorio, a logs o a ejemplos.
+- No leer, mostrar ni copiar `.env`, `.env.local` u otros secretos. Solo inspeccionar `.env.example`.
+- Mantener las comprobaciones de propietario en Server Actions y las políticas RLS alineadas.
+- Los redirects posteriores a Auth deben permanecer dentro del origen de la aplicación.
+- No ejecutar SQL contra Supabase remoto desde una tarea de código.
 
-No ejecutar:
-- DROP
-- TRUNCATE
-- borrados masivos
-- migraciones destructivas
+## Migraciones y datos
 
-Si hace falta SQL:
-- crear archivos de migración
-- explicar qué hacen
-- no ejecutarlos automáticamente
+No modificar ni ejecutar automáticamente migraciones existentes durante una tarea normal. No ejecutar `DROP`, `TRUNCATE`, borrados masivos ni cambios destructivos. Si hace falta SQL, crear una nueva migración aditiva, explicar su propósito y dejar su ejecución para revisión humana.
 
-## Estado actual
-Ya funcionan:
-- biblioteca de ejercicios
-- importación de unos 220 ejercicios
-- rutinas
-- días secuenciales
-- ejercicios planificados por día
-- rutina activa
-- inicio de sesión
-- registro y actualización de series
-- peso, reps y RIR
-- finalización de sesión
-- avance automático al siguiente día
-- historial básico
+No borrar datos, usuarios o rutinas remotas. Preferir archivado cuando el dominio lo permita. El importador de `scripts/import-exercises.js` es manual, requiere `IMPORT_USER_ID` y no es onboarding normal.
 
-## Consideraciones importantes
-- Existe DEV_USER_ID temporal.
-- Algunas tablas pueden tener RLS desactivado durante desarrollo.
-- No migrar a autenticación real de golpe.
-- Preparar cambios de auth solo con un plan explícito.
-- Conservar en package.json:
+## Git y cambios externos
 
-  "dev": "next dev --webpack"
+Antes de editar:
 
-## Prioridades
-1. Auditar el proyecto.
-2. Consolidar navegación y dashboard.
-3. Completar historial.
-4. Mostrar “última vez” por ejercicio durante la sesión.
-5. Progreso por ejercicio.
-6. PRs automáticos.
-7. Editar, borrar, duplicar y ordenar rutinas/días/ejercicios.
-8. Pulir UX/UI mobile-first.
-9. Ejecutar npm run build.
+```bash
+git status
+git diff
+git branch --show-current
+```
 
-## Calidad
-- No dejar imports rotos.
-- No usar pseudocódigo.
-- No introducir dependencias innecesarias.
-- Crear componentes reutilizables.
-- Corregir errores de TypeScript.
-- Ejecutar npm run build tras cada fase.
-- Informar de archivos modificados y cómo probarlos.
+No cambiar de rama, hacer merge, rebase o `git reset --hard`, no borrar historial, crear commits, hacer push o force-push, crear Pull Requests remotos ni modificar configuración remota de GitHub. No desplegar con Vercel, ejecutar `vercel --prod`, promover previews ni cambiar producción, dominios, secretos o variables de Vercel.
+
+## Calidad y verificación
+
+Comandos principales:
+
+```bash
+npm ci
+npm run lint
+npm run typecheck
+npm test
+npm run build
+```
+
+`npm test` usa el test runner nativo de Node y cubre lógica pura. Añadir tests para validadores, transformaciones y cálculos deterministas; evitar tests contra Supabase remoto, Auth real, Vercel o APIs externas en la baseline.
+No usar pseudocódigo ni introducir dependencias innecesarias; corregir errores claros de TypeScript/lint y crear componentes reutilizables cuando el patrón ya exista.
+
+Antes de terminar:
+
+1. revisar el diff completo y el `git diff --stat`;
+2. confirmar que no se tocaron migraciones ni secretos;
+3. comprobar imports, tipos, lint, tests y build;
+4. indicar claramente cualquier comando `FAIL` o `NOT VERIFIED`;
+5. listar archivos modificados y cómo probarlos;
+6. confirmar rama, ausencia de commit/push y ausencia de cambios en producción.
+
+En fases de implementación, ejecutar `npm run build` al cerrar cada fase relevante y explicar los archivos modificados y cómo probarlos.
+
+## Cambios funcionales
+
+Solo corregir bugs pequeños cuando la causa y el comportamiento esperado sean inequívocos y exista una verificación razonable. No rehacer la aplicación, cambiar framework, sustituir Supabase, cambiar App Router ni hacer refactorizaciones grandes por estética.
+
+Las operaciones que afecten autenticación real, RLS, esquema, datos remotos, secretos, producción o despliegue requieren aprobación humana explícita y un plan antes de ejecutarse.
