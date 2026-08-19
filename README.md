@@ -1,46 +1,47 @@
 # DavidTrain
 
-DavidTrain es una aplicación web personal para planificar y registrar entrenamientos. El repositorio se centra en el módulo de entrenamiento: biblioteca de ejercicios, rutinas, sesiones, historial y métricas de progreso.
+DavidTrain is a personal web application for planning and tracking training. The repository focuses on the training module: exercise library, workout routines, sessions, history and progress metrics.
 
-## Estado actual
+## Current status
 
-El flujo principal está implementado y usa Supabase Auth con sesiones basadas en cookies. La aplicación permite:
+The main workflow is implemented and uses Supabase Auth with cookie-based sessions. The application supports:
 
-- crear, editar, archivar, duplicar y ordenar rutinas y días;
-- crear y gestionar ejercicios personales y consultar una biblioteca global;
-- añadir ejercicios planificados con series, rango de repeticiones, RIR, descanso y notas;
-- activar una rutina, avanzar por sus días y saltar un día;
-- iniciar, continuar, cancelar y finalizar sesiones;
-- guardar peso, repeticiones y RIR por serie;
-- mostrar el rendimiento anterior del mismo ejercicio y día durante una sesión;
-- consultar historial, volumen, frecuencia, mejores cargas y 1RM estimado;
-- adjuntar y validar enlaces de técnica de YouTube.
+- creating, editing, archiving, duplicating and reordering routines and workout days;
+- creating and managing personal exercises and browsing a global exercise library;
+- adding planned exercises with sets, repetition ranges, RIR, rest periods and notes;
+- activating a routine, progressing through its workout days and skipping a day;
+- starting, continuing, cancelling and completing workout sessions;
+- recording weight, repetitions and RIR for each set;
+- showing previous performance for the same exercise and workout day during a session;
+- reviewing training history, volume, frequency, best loads and estimated 1RM;
+- attaching and validating YouTube technique links.
 
-La ruta de nutrición existe únicamente como pantalla pendiente y no forma parte del alcance de este proyecto.
+The nutrition route currently exists only as a placeholder screen and is outside the scope of this project.
 
-## Stack y arquitectura
+## Stack and architecture
 
-- Next.js 16 con App Router y TypeScript.
-- React 19, Tailwind CSS 4 y componentes UI ligeros.
-- Supabase Auth, Supabase SSR y PostgreSQL.
-- Desarrollo con Webpack, conservando `next dev --webpack`.
+- Next.js 16 with App Router and TypeScript.
+- React 19, Tailwind CSS 4 and lightweight UI components.
+- Supabase Auth, Supabase SSR and PostgreSQL.
+- Development with Webpack, using `next dev --webpack`.
 
-Las páginas servidor viven en `app/`. Los componentes interactivos están en `components/`. Las Server Actions y consultas de dominio están en `lib/`, con los clientes de Supabase en `lib/supabase/`. Las migraciones SQL versionadas están en `supabase/migrations/` y las utilidades manuales en `scripts/`.
+Server-rendered pages live in `app/`. Interactive components are located in `components/`. Server Actions and domain queries live in `lib/`, with Supabase clients under `lib/supabase/`. Versioned SQL migrations are stored in `supabase/migrations/`, while manual utilities are located in `scripts/`.
 
-El flujo habitual es:
+The typical application flow is:
 
-1. una página de `app/` obtiene datos mediante funciones de `lib/`;
-2. las mutaciones se ejecutan mediante Server Actions;
-3. los componentes cliente actualizan la interfaz y refrescan los datos del servidor;
-4. Supabase Auth identifica al usuario y las políticas RLS limitan el acceso a sus datos.
+1. a page under `app/` retrieves data through functions in `lib/`;
+2. mutations are executed through Server Actions;
+3. client components update the interface and refresh server data;
+4. Supabase Auth identifies the user and RLS policies restrict access to that user's data.
 
-## Requisitos
 
-- Node.js 22 LTS o posterior para ejecutar también la baseline de tests nativa;
+## Requirements
+
+- Node.js 22 LTS or later, including support for the native test baseline;
 - npm;
-- un proyecto de Supabase configurado con las migraciones del repositorio.
+- a Supabase project configured with the migrations included in this repository..
 
-## Instalación local
+## Local installation
 
 ```bash
 git clone https://github.com/davidd817/davidtrain.git
@@ -49,20 +50,20 @@ copy .env.example .env.local
 npm ci
 ```
 
-Completa `.env.local` con los valores de tu propio proyecto de Supabase. No subas ese archivo al repositorio.
+Fill `.env.local` with the values from your own Supabase project. Do not commit this file to the repository.
 
-## Variables de entorno
+## Environment variables
 
-Los nombres soportados por el código y documentados en `.env.example` son:
+The environment variables supported by the application and documented in `.env.example` are:
 
-- `NEXT_PUBLIC_SUPABASE_URL`: URL pública del proyecto Supabase.
-- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`: clave publicable/anónima del proyecto.
-- `NEXT_PUBLIC_SITE_URL`: origen de la aplicación para enlaces de Auth.
-- `IMPORT_USER_ID`: opcional; solo lo usa el script manual de importación de ejercicios.
+- `NEXT_PUBLIC_SUPABASE_URL`: public URL of the Supabase project.
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`: publishable/anonymous project key.
+- `NEXT_PUBLIC_SITE_URL`: application origin used for Auth links.
+- `IMPORT_USER_ID`: optional; only used by the manual exercise import script.
 
-No se necesita ni se debe configurar una clave `service_role` para ejecutar la aplicación.
+A `service_role` key is not required and should not be configured to run the application.
 
-## Desarrollo y comandos
+## Development and commands
 
 ```bash
 npm run dev
@@ -73,26 +74,29 @@ npm run build
 npm start
 ```
 
-El servidor de desarrollo queda disponible en `http://localhost:3000`. `npm test` usa el test runner integrado de Node para validar lógica pura sin añadir dependencias de testing.
+The development server is available at `http://localhost:3000`. `npm test` uses Node's built-in test runner to validate pure application logic without adding testing dependencies.
 
-## Supabase y migraciones
+## Supabase and migrations
 
-El modelo principal utiliza `profiles`, `exercises`, `workout_routines`, `workout_days`, `exercises_in_day`, `user_training_state`, `workout_sessions` y `exercise_logs`. Las evoluciones adicionales utilizan `user_exercise_favorites` y `workout_day_skips`.
+The main model uses `profiles`, `exercises`, `workout_routines`, `workout_days`, `exercises_in_day`, `user_training_state`, `workout_sessions` and `exercise_logs`. Additional functionality uses `user_exercise_favorites` and `workout_day_skips`.
 
-Las migraciones se aplican manualmente en Supabase, en orden cronológico, y no se ejecutan desde la aplicación ni desde CI. Antes de aplicarlas en un proyecto existente, revisa sus políticas RLS, funciones y datos. Consulta [docs/deployment.md](docs/deployment.md) y [docs/known-risks.md](docs/known-risks.md).
+Migrations are applied manually in Supabase in chronological order and are not executed by the application or CI. Before applying them to an existing project, review their RLS policies, functions and data changes. See [docs/deployment.md](docs/deployment.md) y [docs/known-risks.md](docs/known-risks.md).
 
-## Despliegue
+## Deployment
 
-El proyecto está preparado para un despliegue estándar de Next.js, incluido Vercel. Este repositorio no contiene un workflow propio de despliegue; si Vercel está conectado al repositorio, sus previews y despliegues automáticos dependen de la configuración externa de ese proyecto. Configura las variables de entorno en el proveedor, establece `npm run build` como comando de build y añade en Supabase las URLs de callback correspondientes. Los pasos están en [docs/deployment.md](docs/deployment.md).
+The project is compatible with a standard Next.js deployment, including Vercel.
+This repository does not contain a dedicated deployment workflow. If Vercel is connected to the repository, preview and production deployments depend on the external Vercel project configuration.
+Configure the required environment variables in the deployment provider, use `npm run build` cas the build command and add the corresponding callback URLs in Supabase. Deployment instructions are documented in [docs/deployment.md](docs/deployment.md).
 
-## Seguridad y limitaciones
+## Security and limitations
 
-- Las claves de Supabase usadas por el navegador deben ser únicamente publicables.
-- La autorización depende de Supabase Auth y de RLS; la migración de Auth/RLS debe estar aplicada y revisada antes de un uso multiusuario.
-- El importador de ejercicios es una utilidad administrativa manual y escribe en Supabase; no debe usarse como onboarding normal.
-- No hay pruebas end-to-end contra Supabase, Vercel ni Auth real en CI.
-- La aplicación necesita un proyecto Supabase accesible para probar los flujos completos.
+- Supabase keys exposed to the browser must be publishable keys only.
+- Authorization relies on Supabase Auth and Row Level Security; the Auth/RLS migrations must be applied and reviewed before multi-user use.
+- The exercise importer is a manual administrative utility that writes to Supabase and should not be used as a normal onboarding mechanism.
+- CI does not run end-to-end tests against Supabase, Vercel or a real authentication environment.
+- A reachable Supabase project is required to test complete application flows.
 
-## Contribución y desarrollo
+## Contributing and development workflow
 
-Lee [AGENTS.md](AGENTS.md) antes de modificar el repositorio y [CONTRIBUTING.md](CONTRIBUTING.md) para el flujo de cambios. Mantén los cambios pequeños, no edites migraciones existentes sin una razón explícita y ejecuta lint, typecheck, tests y build antes de solicitar revisión.
+Read [AGENTS.md](AGENTS.md) before modifying the repository and [CONTRIBUTING.md](CONTRIBUTING.md) for the expected development workflow.
+Keep changes small, avoid editing existing migrations without an explicit reason, and run lint, typecheck, tests and build before requesting review.
